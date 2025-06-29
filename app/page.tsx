@@ -45,7 +45,7 @@ export default function Home() {
           className={`w-full h-14 border-t border-neutral-800 ${authenticated ? 'pointer-events-none' : ''}`}
           variant={authenticated ? 'ghost' : 'secondary'}
         >
-          {authenticated ? 'Select checks to deposit →' : 'Connect wallet to deposit checks'}
+          {authenticated ? 'No checks deposited yet' : 'Connect wallet to deposit checks'}
         </Button>
       </div>
 

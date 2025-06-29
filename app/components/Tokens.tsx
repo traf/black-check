@@ -112,28 +112,28 @@ export default function Tokens() {
 
     return (
         <div className="w-full h-full flex flex-col">
-            <div className="flex-1 overflow-y-auto">
+            <div className="flex-1 overflow-y-auto overflow-x-hidden">
                 <div className="grid grid-cols-2 pb-16">
                     {nfts.map((nft) => {
                         const isSelected = selectedNfts.has(nft.identifier);
                         return (
                             <button
                                 key={nft.identifier}
-                                className="relative cursor-pointer"
+                                className="relative cursor-pointer mix-blend-lighten group"
                                 onClick={() => toggleNftSelection(nft.identifier)}
                             >
                                 {(nft.display_image_url || nft.image_url) && (
                                     <img
                                         src={nft.display_image_url || nft.image_url}
                                         alt={`Checks #${nft.identifier}`}
-                                        className={`w-full object-cover mix-blend-lighten relative ${isSelected && 'blur-[2px] opacity-60'}`}
+                                        className={`w-full h-full object-cover relative -my-4 group-hover:opacity-60 ${isSelected && 'blur-[2px] opacity-60'}`}
                                         onError={(e) => {
                                             // Hide broken images
                                             e.currentTarget.style.display = 'none';
                                         }}
                                     />
                                 )}
-                                <p className="absolute bottom-8 w-full text-center">#{nft.identifier}</p>
+                                <p className="absolute bottom-4 w-full text-center">#{nft.identifier}</p>
                                 {isSelected && (
                                     <div className="absolute left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2">
                                         <Check className="w-6 h-6" />
@@ -147,7 +147,7 @@ export default function Tokens() {
             <div className="w-full h-14 flex-center bg-neutral-950/75 backdrop-blur-sm border-t border-neutral-800 flex-shrink-0">
                 <div className="w-full flex-between h-full">
                     {selectedNfts.size > 0 ? (
-                        <Button variant="ghost" className="flex-1 h-full hover:bg-neutral/5">
+                        <Button variant="secondary" className="flex-1 h-full hover:bg-neutral/5">
                             Deposit {selectedNfts.size} check{selectedNfts.size !== 1 ? 's' : ''}
                         </Button>
                     ) : (
@@ -156,7 +156,7 @@ export default function Tokens() {
                         </Button>
                     )}
                     <Button
-                        variant="ghost"
+                        variant="tertiary"
                         className="w-40 h-full border-l border-neutral-800"
                         onClick={handleSelectAllToggle}
                     >

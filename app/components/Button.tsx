@@ -3,7 +3,7 @@ interface ButtonProps {
   href?: string;
   target?: string;
   onClick?: () => void;
-  variant?: 'primary' | 'secondary' | 'ghost';
+  variant?: 'primary' | 'secondary' | 'tertiary' | 'ghost';
   size?: 'sm' | 'md';
   className?: string;
   disabled?: boolean;
@@ -19,12 +19,13 @@ export default function Button({
   className = '',
   disabled = false
 }: ButtonProps) {
-  const baseClasses = "font-mono flex-center cursor-pointer text-white flex-shrink-0";
+  const baseClasses = "font-mono flex-center cursor-pointer flex-shrink-0";
   
   const variantClasses = {
-    primary: "bg-white !text-black hover:bg-neutral-200",
-    secondary: "bg-neutral-900 hover:bg-neutral-800",
-    ghost: "bg-transparent hover:bg-neutral-900"
+    primary: "bg-white !text-black hover:bg-neutral-200 text-white",
+    secondary: "bg-neutral-900 hover:bg-neutral-800 text-white",
+    tertiary: "bg-transparent text-neutral-400 hover:text-white",
+    ghost: "bg-transparent hover:bg-neutral-900 text-white"
   };
 
   const sizeClasses = {
