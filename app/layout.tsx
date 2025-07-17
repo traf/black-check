@@ -44,7 +44,7 @@ export default function RootLayout({
 }>) {
   return (
     <html lang="en">
-      <body className={`flex flex-col lg:flex-row h-fit lg:h-screen bg-neutral-950 text-white antialiased selection:bg-white selection:text-black font-mono ${carbon.variable} ${fk.variable}`}>
+      <body className={`flex flex-col lg:flex-row h-fit lg:h-screen bg-neutral-950 text-white antialiased selection:bg-white selection:text-black font-mono overscroll-none ${carbon.variable} ${fk.variable}`}>
         <PrivyWrapper>
           <div className="w-14 h-screen hidden lg:flex justify-between flex-col flex-shrink-0">
             <Logo />

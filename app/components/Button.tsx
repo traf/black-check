@@ -19,7 +19,7 @@ export default function Button({
   className = '',
   disabled = false
 }: ButtonProps) {
-  const baseClasses = "font-mono flex-center cursor-pointer flex-shrink-0";
+  const baseClasses = "font-mono flex-center cursor-pointer flex-shrink-0 whitespace-nowrap";
   
   const variantClasses = {
     primary: "bg-white !text-black hover:bg-neutral-200 text-white",
