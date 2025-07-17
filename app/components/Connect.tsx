@@ -28,9 +28,7 @@ export default function Connect({ className = "" }: { className?: string }) {
   }, []);
 
   const handleConnect = () => {
-    if (authenticated) {
-      logout();
-    } else {
+    if (!authenticated) {
       login();
     }
   };
