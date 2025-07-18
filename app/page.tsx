@@ -41,7 +41,7 @@ export default function Home() {
               <p className="flex flex-row sm:flex-col items-start gap-3 text-left sm:text-balance"><Check className="w-4 mt-1.5" /> Your contribution to the Black Check will be recorded onchain forever.</p>
             </div>
           </div>
-          <Grid rows={4} cols={3} className="hidden lg:grid" />
+          <Grid rows={4} cols={3} className={`hidden lg:${authenticated ? 'hidden' : 'grid'}`} />
         </div>
         <Button
           onClick={!authenticated ? handleConnect : undefined}

@@ -1,6 +1,9 @@
 import { NextRequest, NextResponse } from 'next/server';
 
-const CONTRACT_ADDRESS = '0x036721e5a769cc48b3189efbb9cce4471e8a48b1';
+const COLLECTION_SLUGS = [
+  'vv-checks',
+  'vv-checks-originals'
+];
 
 export async function GET(
   request: NextRequest,
@@ -18,40 +21,44 @@ export async function GET(
       return NextResponse.json({ error: 'Invalid address format' }, { status: 400 });
     }
 
-    const url = `https://api.opensea.io/api/v2/chain/ethereum/account/${address}/nfts`;
-    
     const headers: HeadersInit = {
       'accept': 'application/json',
     };
 
     // Add API key if available
     if (process.env.OPENSEA_API_KEY) {
-      headers['X-API-KEY'] = process.env.OPENSEA_API_KEY;
+      headers['x-api-key'] = process.env.OPENSEA_API_KEY;
     }
 
-    const response = await fetch(url, {
-      method: 'GET',
-      headers,
-    });
-
-    if (!response.ok) {
-      return NextResponse.json(
-        { error: `OpenSea API error: ${response.status}` },
-        { status: response.status }
-      );
-    }
-
-    const data = await response.json();
+    // Fetch NFTs from each collection separately using collection parameter
+    const allNFTs = [];
     
-    // Filter NFTs by the specific contract address
-    const contractNFTs = data.nfts?.filter((nft: { contract?: string }) => 
-      nft.contract?.toLowerCase() === CONTRACT_ADDRESS.toLowerCase()
-    ) || [];
+    for (const collection of COLLECTION_SLUGS) {
+      const url = `https://api.opensea.io/api/v2/chain/ethereum/account/${address}/nfts?collection=${collection}&limit=100`;
+      
+      try {
+        const response = await fetch(url, {
+          method: 'GET',
+          headers,
+        });
 
-    return NextResponse.json({ nfts: contractNFTs });
-  } catch {
+        if (response.ok) {
+          const data = await response.json();
+          
+          if (data.nfts && data.nfts.length > 0) {
+            allNFTs.push(...data.nfts);
+          }
+        }
+      } catch (error) {
+        console.error(`Error fetching ${collection}:`, error);
+      }
+    }
+
+    return NextResponse.json({ nfts: allNFTs });
+  } catch (error) {
+    console.error('API route error:', error);
     return NextResponse.json(
-      { error: 'Failed to fetch NFTs' },
+      { error: 'Failed to fetch NFTs', details: error instanceof Error ? error.message : 'Unknown error' },
       { status: 500 }
     );
   }

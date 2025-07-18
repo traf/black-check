@@ -8,6 +8,7 @@ import Button from './Button';
 interface NFT {
     identifier: string;
     contract: string;
+    collection: string;
     image_url: string;
     display_image_url: string;
 }
@@ -57,7 +58,19 @@ export default function Tokens() {
             }
 
             const data = await response.json();
-            setNfts(data.nfts || []);
+            // Sort NFTs: originals first, then editions, then by token ID
+            const sortedNfts = (data.nfts || []).sort((a: NFT, b: NFT) => {
+                // First sort by collection (originals first)
+                if (a.collection === 'vv-checks-originals' && b.collection !== 'vv-checks-originals') {
+                    return -1;
+                }
+                if (b.collection === 'vv-checks-originals' && a.collection !== 'vv-checks-originals') {
+                    return 1;
+                }
+                // Then sort by token ID numerically
+                return parseInt(a.identifier) - parseInt(b.identifier);
+            });
+            setNfts(sortedNfts);
         } catch (err) {
             console.error('Error fetching NFTs:', err);
             setError('Failed to fetch NFTs. This might be due to network issues or API rate limits.');
@@ -113,7 +126,7 @@ export default function Tokens() {
     return (
         <div className="w-full h-full flex flex-col">
             <div className="flex-1 overflow-y-auto overflow-x-hidden">
-                <div className="grid grid-cols-2 pb-16">
+                <div className="grid grid-cols-2 divide-x divide-y divide-neutral-800">
                     {nfts.map((nft) => {
                         const isSelected = selectedNfts.has(nft.identifier);
                         return (
@@ -133,7 +146,7 @@ export default function Tokens() {
                                         }}
                                     />
                                 )}
-                                <p className="absolute bottom-4 w-full text-center">#{nft.identifier}</p>
+                                <p className="absolute bottom-6 w-full text-center">#{nft.identifier}</p>
                                 {isSelected && (
                                     <div className="absolute left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2">
                                         <Check className="w-6 h-6" />
