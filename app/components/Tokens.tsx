@@ -85,7 +85,7 @@ export default function Tokens() {
         }
 
         fetchTokens();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
+        // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [ready, authenticated, user?.wallet?.address]);
 
     if (!ready || !authenticated) {
@@ -126,13 +126,16 @@ export default function Tokens() {
     return (
         <div className="w-full h-full flex flex-col">
             <div className="flex-1 overflow-y-auto overflow-x-hidden">
-                <div className="grid grid-cols-2 divide-x divide-y divide-neutral-800">
-                    {nfts.map((nft) => {
+                <div className="grid grid-cols-2">
+                    {nfts.map((nft, index) => {
                         const isSelected = selectedNfts.has(nft.identifier);
+                        const isEvenIndex = index % 2 === 0;
+                        const isLastItemOdd = nfts.length % 2 === 1 && index === nfts.length - 1;
                         return (
                             <button
                                 key={nft.identifier}
-                                className="relative cursor-pointer mix-blend-lighten group"
+                                className={`relative cursor-pointer mix-blend-lighten group border-b border-neutral-800 ${isEvenIndex ? 'border-r border-neutral-800' : ''
+                                    } ${isLastItemOdd ? 'border-b-0 border-r border-neutral-800' : ''}`}
                                 onClick={() => toggleNftSelection(nft.identifier)}
                             >
                                 {(nft.display_image_url || nft.image_url) && (
