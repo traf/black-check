@@ -30,9 +30,9 @@ export default function Home() {
         <div className="flex-end flex-col w-full h-full relative p-4 lg:p-0">
           <div className="flex flex-col p-4 sm:p-12">
             {authenticated ? (
-              <h1 className="text-balance my-8">gm, {getDisplayName()}—select some Checks to deposit into the Black Check contract.</h1>
+              <h1 className="text-balance my-16">gm, {getDisplayName()}—select some Checks to deposit into the Black Check contract.</h1>
             ) : (
-              <h1 className="text-balance my-8">The Black Check — web3's ultimate artifact.</h1>
+              <h1 className="text-balance my-16">The Black Check — web3's ultimate artifact.</h1>
             )}
             <div className="w-full grid grid-cols-1 sm:grid-cols-2 gap-6">
               <p className="flex flex-row sm:flex-col items-start gap-3 text-left sm:text-balance"><Check className="w-4 mt-1.5" /> Contribute your Check to the aggregator to receive a unique onchain receipt.</p>

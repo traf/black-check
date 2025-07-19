@@ -91,7 +91,7 @@ export default function Tokens() {
     if (!ready || !authenticated) {
         return (
             <div className="flex-center flex-col w-full h-full p-16">
-                <img src="/check-token.png" alt="black check" className="w-64" />
+                <img src="/check-token.png" alt="black check" className="w-72" />
             </div>
         );
     }
