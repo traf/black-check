@@ -80,8 +80,8 @@ export async function GET(
           if (data.ownedNfts && data.ownedNfts.length > 0) {
             // Transform Alchemy response to match expected format
             const transformedNFTs = data.ownedNfts.map((nft: any) => ({
-              identifier: nft.tokenId,
-              name: nft.title || `#${nft.tokenId}`,
+              identifier: BigInt(nft.id.tokenId).toString(),
+              name: nft.title || `#${BigInt(nft.id.tokenId).toString()}`,
               description: nft.description || "",
               image_url: nft.media?.[0]?.gateway || nft.media?.[0]?.raw || "",
               collection: nft.contract.name || "",
