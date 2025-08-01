@@ -1,22 +1,28 @@
-'use client';
+"use client";
 
-import { usePrivy, useLogin } from '@privy-io/react-auth';
+import { usePrivy, useLogin } from "@privy-io/react-auth";
 import Grid from "./components/Grid";
 import Button from "./components/Button";
 import Check from "./components/Check";
 import Tokens from "./components/Tokens";
 import { useENS } from "./hooks/useENS";
+import { useFundingCompleted } from "./hooks/useFundingCompleted";
 
 export default function Home() {
   const { authenticated, user } = usePrivy();
   const { login } = useLogin();
   const address = user?.wallet?.address;
   const ensName = useENS(address);
+  const {
+    fundingCompleted,
+    loading: fundingLoading,
+    error: fundingError,
+  } = useFundingCompleted();
 
   const getDisplayName = () => {
-    if (ensName) return ensName.replace('.eth', '');
+    if (ensName) return ensName.replace(".eth", "");
     if (address) return `${address.slice(0, 6)}...${address.slice(-4)}`;
-    return 'anon';
+    return "anon";
   };
 
   const handleConnect = () => {
@@ -25,37 +31,86 @@ export default function Home() {
 
   return (
     <div className="flex flex-col lg:flex-row w-full h-full divide-x divide-neutral-800">
-
       <div className="flex-end flex-col flex-1 relative pt-12 lg:pt-0">
         <div className="flex-end flex-col w-full h-full relative p-4 lg:p-0">
           <div className="flex flex-col p-4 sm:p-12">
             {authenticated ? (
-              <h1 className="text-balance my-16">gm, {getDisplayName()}—select some Checks to deposit into the Black Check contract.</h1>
+              <h1 className="text-balance my-16">
+                gm, {getDisplayName()}—select some Checks to deposit into the
+                Black Check contract.
+              </h1>
             ) : (
-              <h1 className="text-balance my-16">The Black Check — web3's ultimate artifact.</h1>
+              <h1 className="text-balance my-16">
+                The Black Check — web3's ultimate artifact.
+              </h1>
             )}
+
+            {/* Funding Status Display */}
+            <div className="mb-8 p-4 bg-neutral-900 rounded-lg border border-neutral-800">
+              <h2 className="text-lg font-semibold mb-2">
+                Black Check Funding Status
+              </h2>
+              {fundingLoading ? (
+                <p className="text-neutral-400">Loading funding status...</p>
+              ) : fundingError ? (
+                <p className="text-red-400">Error: {fundingError}</p>
+              ) : (
+                <div className="flex items-center gap-2">
+                  <div
+                    className={`w-3 h-3 rounded-full ${
+                      fundingCompleted ? "bg-green-500" : "bg-yellow-500"
+                    }`}
+                  ></div>
+                  <p className="text-neutral-300">
+                    {fundingCompleted
+                      ? "Funding completed! The Black Check is ready for compositing."
+                      : "Funding in progress... More Checks needed for compositing."}
+                  </p>
+                </div>
+              )}
+            </div>
+
             <div className="w-full grid grid-cols-1 sm:grid-cols-2 gap-6">
-              <p className="flex flex-row sm:flex-col items-start gap-3 text-left sm:text-balance"><Check className="w-4 mt-1.5" /> Contribute your Check to the aggregator to receive a unique onchain receipt.</p>
-              <p className="flex flex-row sm:flex-col items-start gap-3 text-left sm:text-balance"><Check className="w-4 mt-1.5" /> Once enough Checks are deposited, the aggregator automatically composites.</p>
-              <p className="flex flex-row sm:flex-col items-start gap-3 text-left sm:text-balance"><Check className="w-4 mt-1.5" /> Your receipt will then become your vote in the fate of the Black Check!</p>
-              <p className="flex flex-row sm:flex-col items-start gap-3 text-left sm:text-balance"><Check className="w-4 mt-1.5" /> Your contribution to the Black Check will be recorded onchain forever.</p>
+              <p className="flex flex-row sm:flex-col items-start gap-3 text-left sm:text-balance">
+                <Check className="w-4 mt-1.5" /> Contribute your Check to the
+                aggregator to receive a unique onchain receipt.
+              </p>
+              <p className="flex flex-row sm:flex-col items-start gap-3 text-left sm:text-balance">
+                <Check className="w-4 mt-1.5" /> Once enough Checks are
+                deposited, the aggregator automatically composites.
+              </p>
+              <p className="flex flex-row sm:flex-col items-start gap-3 text-left sm:text-balance">
+                <Check className="w-4 mt-1.5" /> Your receipt will then become
+                your vote in the fate of the Black Check!
+              </p>
+              <p className="flex flex-row sm:flex-col items-start gap-3 text-left sm:text-balance">
+                <Check className="w-4 mt-1.5" /> Your contribution to the Black
+                Check will be recorded onchain forever.
+              </p>
             </div>
           </div>
-          <Grid rows={4} cols={3} className={`hidden lg:${authenticated ? 'hidden' : 'grid'}`} />
+          <Grid
+            rows={4}
+            cols={3}
+            className={`hidden lg:${authenticated ? "hidden" : "grid"}`}
+          />
         </div>
         <Button
           onClick={!authenticated ? handleConnect : undefined}
-          className={`w-full h-14 border-b lg:border-b-0 border-t border-neutral-800 ${authenticated ? 'pointer-events-none' : ''}`}
-          variant={authenticated ? 'ghost' : 'secondary'}
+          className={`w-full h-14 border-b lg:border-b-0 border-t border-neutral-800 ${
+            authenticated ? "pointer-events-none" : ""
+          }`}
+          variant={authenticated ? "ghost" : "secondary"}
         >
-          {authenticated ? 'No checks deposited yet' : 'Connect wallet to deposit checks'}
+          {authenticated
+            ? "No checks deposited yet"
+            : "Connect wallet to deposit checks"}
         </Button>
       </div>
 
       <div className="flex-center flex-col flex-1 h-full bg-neutral-950">
         <Tokens />
       </div>
-
     </div>
   );
 }
