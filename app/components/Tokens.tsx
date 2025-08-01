@@ -32,7 +32,9 @@ export default function Tokens() {
     originals: boolean;
   }>({ editions: false, originals: false });
   const [showApprovalPrompt, setShowApprovalPrompt] = useState(false);
+  const [showDepositPrompt, setShowDepositPrompt] = useState(false);
   const [approvalLoading, setApprovalLoading] = useState(false);
+  const [depositLoading, setDepositLoading] = useState(false);
 
   const toggleNftSelection = (identifier: string) => {
     setSelectedNfts((prev) => {
@@ -193,8 +195,9 @@ export default function Tokens() {
         return;
       }
 
-      // Proceed with deposit if all approvals are in place
-      await performDeposit();
+      // Show deposit confirmation modal
+      setShowDepositPrompt(true);
+      setLoading(false);
     } catch (err) {
       console.error("Error in handleDeposit:", err);
       setError("Failed to process deposit. Please try again.");
@@ -206,6 +209,9 @@ export default function Tokens() {
     if (!user?.wallet?.address) return;
 
     try {
+      setDepositLoading(true);
+      setError(null);
+
       if (!window.ethereum) {
         throw new Error("No Ethereum provider found");
       }
@@ -250,11 +256,14 @@ export default function Tokens() {
 
       // Refresh the NFT list
       await fetchTokens();
+
+      // Close the deposit modal
+      setShowDepositPrompt(false);
     } catch (err) {
       console.error("Error depositing NFTs:", err);
       setError("Failed to deposit NFTs. Please try again.");
     } finally {
-      setLoading(false);
+      setDepositLoading(false);
     }
   };
 
@@ -426,6 +435,67 @@ export default function Tokens() {
                 disabled={!approvalStatus.editions || !approvalStatus.originals}
               >
                 Deposit
+              </Button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Deposit Confirmation Modal */}
+      {showDepositPrompt && (
+        <div className="fixed inset-0 bg-black/80 backdrop-blur-sm z-50 flex items-center justify-center p-4">
+          <div className="bg-neutral-900 border border-neutral-800 rounded-lg p-6 max-w-md w-full">
+            <h3 className="text-white text-lg font-semibold mb-4">
+              Confirm Deposit
+            </h3>
+            <p className="text-neutral-300 mb-6">
+              You are about to deposit {selectedNfts.size} Check
+              {selectedNfts.size !== 1 ? "s" : ""} to the Black Check One
+              contract. This action cannot be undone.
+            </p>
+
+            <div className="mb-6">
+              <div className="text-sm text-neutral-400 mb-2">
+                Selected Checks:
+              </div>
+              <div className="max-h-32 overflow-y-auto space-y-1">
+                {Array.from(selectedNfts).map((identifier) => {
+                  const nft = nfts.find((n) => n.identifier === identifier);
+                  return (
+                    <div
+                      key={identifier}
+                      className="flex items-center gap-2 text-sm text-neutral-300"
+                    >
+                      <span>#{identifier}</span>
+                      <span className="text-neutral-500">
+                        (
+                        {nft?.collection === "vv-checks-originals"
+                          ? "Original"
+                          : "Edition"}
+                        )
+                      </span>
+                    </div>
+                  );
+                })}
+              </div>
+            </div>
+
+            <div className="flex gap-3">
+              <Button
+                onClick={() => setShowDepositPrompt(false)}
+                variant="ghost"
+                className="flex-1"
+                disabled={depositLoading}
+              >
+                Cancel
+              </Button>
+              <Button
+                onClick={performDeposit}
+                variant="secondary"
+                className="flex-1"
+                disabled={depositLoading}
+              >
+                {depositLoading ? "Depositing..." : "Confirm Deposit"}
               </Button>
             </div>
           </div>
