@@ -3,7 +3,7 @@ interface ButtonProps {
   href?: string;
   target?: string;
   onClick?: () => void;
-  variant?: 'primary' | 'secondary' | 'tertiary' | 'ghost';
+  variant?: 'primary' | 'secondary' | 'tertiary' | 'border' | 'ghost';
   size?: 'sm' | 'md';
   className?: string;
   disabled?: boolean;
@@ -25,6 +25,7 @@ export default function Button({
     primary: "bg-white !text-black hover:bg-neutral-200 text-white",
     secondary: "bg-neutral-900 hover:bg-neutral-800 text-white",
     tertiary: "bg-transparent text-neutral-400 hover:text-white",
+    border: "bg-black border border-neutral-800 hover:bg-neutral-900 text-white",
     ghost: "bg-transparent hover:bg-neutral-900 text-white"
   };
 

@@ -10,6 +10,7 @@ import { useENS } from "./hooks/useENS";
 import { useFundingCompleted } from "./hooks/useFundingCompleted";
 import { useChecksByLevel } from "./hooks/useChecksByLevel";
 import ChecksModal from "./components/ChecksModal";
+import Badge from "./components/Badge";
 
 export default function Home() {
   const { authenticated, user } = usePrivy();
@@ -71,76 +72,22 @@ export default function Home() {
     <div className="flex flex-col lg:flex-row w-full h-full divide-x divide-neutral-800">
       <div className="flex flex-col flex-1 relative pt-12 lg:pt-0 overflow-hidden">
         <div className="flex flex-col w-full h-full relative p-4 lg:p-0 overflow-y-auto">
-          <div className="flex flex-col p-4 sm:p-12">
+          <div className="flex flex-col justify-end p-4 sm:p-12 mt-auto">
+            <Badge
+              title={fundingCompleted ? "Funding completed... Black check ready to composite!" : "Funding active... More checks needed to composite."}
+              loading={fundingLoading}
+              error={fundingError || undefined}
+              completed={fundingCompleted || false}
+            />
             {authenticated ? (
-              <h1 className="text-balance my-16">
-                gm, {getDisplayName()}—select some Checks to deposit into the
-                Black Check contract.
+              <h1 className="text-balance mt-6 mb-12">
+                Select some checks to deposit into the contract.
               </h1>
             ) : (
-              <h1 className="text-balance my-16">
+              <h1 className="text-balance mt-6 mb-12">
                 The Black Check — web3's ultimate artifact.
               </h1>
             )}
-
-            {/* Funding Status Display */}
-            <div className="mb-8 p-4 bg-neutral-900 rounded-lg border border-neutral-800">
-              <h2 className="text-lg font-semibold mb-2">
-                Black Check Funding Status
-              </h2>
-              {fundingLoading ? (
-                <p className="text-neutral-400">Loading funding status...</p>
-              ) : fundingError ? (
-                <p className="text-red-400">Error: {fundingError}</p>
-              ) : (
-                <div className="flex items-center gap-2">
-                  <div
-                    className={`w-3 h-3 rounded-full ${
-                      fundingCompleted ? "bg-green-500" : "bg-yellow-500"
-                    }`}
-                  ></div>
-                  <p className="text-neutral-300">
-                    {fundingCompleted
-                      ? "Funding completed! The Black Check is ready for compositing."
-                      : "Funding in progress... More Checks needed for compositing."}
-                  </p>
-                </div>
-              )}
-            </div>
-
-            {/* Checks by Level Display */}
-            <div className="mb-8 p-4 bg-neutral-900 rounded-lg border border-neutral-800">
-              <h2 className="text-lg font-semibold mb-4">Checks by Level</h2>
-              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-4">
-                {[
-                  { level: 0, data: level0Checks },
-                  { level: 1, data: level1Checks },
-                  { level: 2, data: level2Checks },
-                  { level: 3, data: level3Checks },
-                  { level: 4, data: level4Checks },
-                ].map(({ level, data }) => (
-                  <div
-                    key={level}
-                    className="p-3 bg-neutral-800 rounded border border-neutral-700 hover:border-neutral-600 hover:bg-neutral-750 cursor-pointer transition-colors"
-                    onClick={() => handleLevelClick(level)}
-                  >
-                    <h3 className="text-sm font-medium mb-2">Level {level}</h3>
-                    {data.loading ? (
-                      <p className="text-xs text-neutral-400">Loading...</p>
-                    ) : data.error ? (
-                      <p className="text-xs text-red-400">Error</p>
-                    ) : (
-                      <div>
-                        <p className="text-xs text-neutral-400 mb-1">
-                          Count: {data.checks?.length || 0}
-                        </p>
-                      </div>
-                    )}
-                  </div>
-                ))}
-              </div>
-            </div>
-
             <div className="w-full grid grid-cols-1 sm:grid-cols-2 gap-6">
               <p className="flex flex-row sm:flex-col items-start gap-3 text-left sm:text-balance">
                 <Check className="w-4 mt-1.5" /> Contribute your Check to the
@@ -168,18 +115,20 @@ export default function Home() {
           />
         </div>
 
-        <div className="mt-auto">
-          <Button
-            onClick={!authenticated ? handleConnect : undefined}
-            className={`w-full h-14 border-b lg:border-b-0 border-t border-neutral-800 ${
-              authenticated ? "pointer-events-none" : ""
-            }`}
-            variant={authenticated ? "ghost" : "secondary"}
-          >
-            {authenticated
-              ? "No checks deposited yet"
-              : "Connect wallet to deposit checks"}
-          </Button>
+        <div className="mt-auto w-full h-14 border-b lg:border-b-0 border-t border-neutral-800 flex items-center justify-center gap-2 px-12 flex-shrink-0">
+          {(() => {
+            const allChecks = [level0Checks, level1Checks, level2Checks, level3Checks, level4Checks];
+            const totalCount = allChecks.reduce((total, level) => total + (level.checks?.length || 0), 0);
+            return `${totalCount} checks deposited`;
+          })()}
+          <p>
+            {(() => {
+              const allChecks = [level0Checks, level1Checks, level2Checks, level3Checks, level4Checks];
+              const totalCount = allChecks.reduce((total, level) => total + (level.checks?.length || 0), 0);
+              const percentage = ((totalCount / 4096) * 100).toFixed(3);
+              return `[${percentage}% complete]`;
+            })()}
+          </p>
         </div>
       </div>
 

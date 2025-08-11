@@ -1,11 +1,12 @@
 "use client";
 
-import { usePrivy } from "@privy-io/react-auth";
+import { usePrivy, useLogin } from "@privy-io/react-auth";
 import { useState, useEffect, useCallback } from "react";
 import { createWalletClient, createPublicClient, custom, http } from "viem";
 import { sepolia } from "viem/chains";
 import Check from "./Check";
 import Button from "./Button";
+import Modal from "./Modal";
 import { BLACK_CHECK_ONE_ABI, ORIGINALS_ABI, EDITIONS_ABI } from "../lib/abi";
 import {
   CHECKS_EDITIONS_SEPOLIA_ADDRESS,
@@ -23,6 +24,7 @@ interface NFT {
 
 export default function Tokens() {
   const { user, ready, authenticated } = usePrivy();
+  const { login } = useLogin();
   const [nfts, setNfts] = useState<NFT[]>([]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -33,7 +35,10 @@ export default function Tokens() {
   }>({ editions: false, originals: false });
   const [showApprovalPrompt, setShowApprovalPrompt] = useState(false);
   const [showDepositPrompt, setShowDepositPrompt] = useState(false);
-  const [approvalLoading, setApprovalLoading] = useState(false);
+  const [approvalLoading, setApprovalLoading] = useState({
+    editions: false,
+    originals: false,
+  });
   const [depositLoading, setDepositLoading] = useState(false);
 
   const toggleNftSelection = (identifier: string) => {
@@ -108,7 +113,8 @@ export default function Tokens() {
     if (!user?.wallet?.address) return;
 
     try {
-      setApprovalLoading(true);
+
+      setApprovalLoading(prev => ({ ...prev, [contractType]: true }));
       setError(null);
 
       if (!window.ethereum) {
@@ -135,7 +141,15 @@ export default function Tokens() {
         account: user.wallet.address as `0x${string}`,
       });
 
-      console.log(`${contractType} approval transaction hash:`, hash);
+
+
+      // Wait for transaction to be mined before updating status
+      const publicClient = createPublicClient({
+        chain: sepolia,
+        transport: http(),
+      });
+
+      await publicClient.waitForTransactionReceipt({ hash });
 
       // Update approval status
       setApprovalStatus((prev) => ({
@@ -152,7 +166,8 @@ export default function Tokens() {
       setError(`Failed to approve ${contractType}. Please try again.`);
       throw err;
     } finally {
-      setApprovalLoading(false);
+
+      setApprovalLoading(prev => ({ ...prev, [contractType]: false }));
     }
   };
 
@@ -249,7 +264,15 @@ export default function Tokens() {
         account: user.wallet.address as `0x${string}`,
       });
 
-      console.log("Transaction hash:", hash);
+
+
+      // Wait for transaction to be mined before updating status
+      const publicClient = createPublicClient({
+        chain: sepolia,
+        transport: http(),
+      });
+
+      await publicClient.waitForTransactionReceipt({ hash });
 
       // Clear selected NFTs after successful deposit
       setSelectedNfts(new Set());
@@ -322,10 +345,29 @@ export default function Tokens() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [ready, authenticated, user?.wallet?.address]);
 
-  if (!ready || !authenticated) {
+  if (!ready) {
     return (
       <div className="flex-center flex-col w-full h-full p-16">
         <img src="/check-token.png" alt="black check" className="w-72" />
+      </div>
+    );
+  }
+
+  if (!authenticated) {
+    return (
+      <div className="flex flex-col w-full h-full">
+        <div className="flex-center flex-col w-full h-full p-16">
+          <img src="/check-token.png" alt="black check" className="w-72" />
+        </div>
+        <div className="w-full flex-center bg-neutral-950/75 backdrop-blur-sm border-t border-neutral-800 flex-shrink-0">
+            <Button
+              onClick={login}
+              variant="ghost"
+              className="flex-1 h-14"
+            >
+              Connect wallet to deposit or withdraw checks
+            </Button>
+        </div>
       </div>
     );
   }
@@ -362,147 +404,109 @@ export default function Tokens() {
   }
 
   return (
-    <div className="w-full h-full flex flex-col">
+    <>
       {/* Approval Prompt Modal */}
-      {showApprovalPrompt && (
-        <div className="fixed inset-0 bg-black/80 backdrop-blur-sm z-50 flex items-center justify-center p-4">
-          <div className="bg-neutral-900 border border-neutral-800 rounded-lg p-6 max-w-md w-full">
-            <h3 className="text-white text-lg font-semibold mb-4">
-              Approve NFT Transfers
-            </h3>
-            <p className="text-neutral-300 mb-6">
-              To deposit your Checks, you need to approve the Black Check One
-              contract to transfer your NFTs.
-            </p>
+      <Modal
+        isOpen={showApprovalPrompt}
+        onClose={() => setShowApprovalPrompt(false)}
+        title="Approve NFT Transfers"
+        subtitle="In order to deposit your Checks, you'll need to approve the Black Check One contract to transfer your NFTs."
+        closeText="Cancel"
+        primaryText="Deposit"
+        onPrimaryAction={async () => {
+          setShowApprovalPrompt(false);
+          await performDeposit();
+        }}
+        primaryDisabled={!approvalStatus.editions || !approvalStatus.originals}
+      >
 
-            <div className="space-y-3 mb-6">
-              {!approvalStatus.editions && (
-                <div className="flex items-center justify-between p-3 bg-neutral-800 rounded">
-                  <span className="text-white">Checks Editions</span>
-                  <Button
-                    onClick={async () => {
-                      try {
-                        await requestApproval("editions");
-                      } catch (err) {
-                        console.error("Error approving editions:", err);
-                      }
-                    }}
-                    variant="secondary"
-                    size="sm"
-                    disabled={approvalLoading}
-                  >
-                    {approvalLoading ? "Approving..." : "Approve"}
-                  </Button>
-                </div>
-              )}
+        <Button
+          onClick={async () => {
+            if (approvalStatus.editions) return;
+            try {
+              await requestApproval("editions");
+            } catch (err) {
+              console.error("Error approving editions:", err);
+            }
+          }}
+          variant="border"
+          disabled={approvalLoading.editions || approvalStatus.editions}
+          className="flex justify-between group !p-5"
+          size="sm"
+        >
+          Checks Editions
+          <span className="bg-white/10 py-2 px-3 text-neutral-400 group-hover:text-white flex items-center gap-2">
+            {approvalStatus.editions ? (
+              <>
+                Approved
+                <img src="/check-light.svg" alt="approved" className="w-4" />
+              </>
+            ) : approvalLoading.editions ? (
+              "Approving..."
+            ) : (
+              "Approve"
+            )}
+          </span>
+        </Button>
 
-              {!approvalStatus.originals && (
-                <div className="flex items-center justify-between p-3 bg-neutral-800 rounded">
-                  <span className="text-white">Checks Originals</span>
-                  <Button
-                    onClick={async () => {
-                      try {
-                        await requestApproval("originals");
-                      } catch (err) {
-                        console.error("Error approving originals:", err);
-                      }
-                    }}
-                    variant="secondary"
-                    size="sm"
-                    disabled={approvalLoading}
-                  >
-                    {approvalLoading ? "Approving..." : "Approve"}
-                  </Button>
-                </div>
-              )}
-            </div>
-
-            <div className="flex gap-3">
-              <Button
-                onClick={() => setShowApprovalPrompt(false)}
-                variant="ghost"
-                className="flex-1"
-              >
-                Cancel
-              </Button>
-              <Button
-                onClick={async () => {
-                  setShowApprovalPrompt(false);
-                  await performDeposit();
-                }}
-                variant="secondary"
-                className="flex-1"
-                disabled={!approvalStatus.editions || !approvalStatus.originals}
-              >
-                Deposit
-              </Button>
-            </div>
-          </div>
-        </div>
-      )}
+        <Button
+          onClick={async () => {
+            if (approvalStatus.originals) return;
+            try {
+              await requestApproval("originals");
+            } catch (err) {
+              console.error("Error approving originals:", err);
+            }
+          }}
+          variant="border"
+          disabled={approvalLoading.originals || approvalStatus.originals}
+          className="flex justify-between group !p-5"
+          size="sm"
+        >
+          Checks Originals
+          <span className="bg-white/10 py-2 px-3 text-neutral-400 group-hover:text-white flex items-center gap-2">
+            {approvalStatus.originals ? (
+              <>
+                Approved
+                <img src="/check-light.svg" alt="approved" className="w-4" />
+              </>
+            ) : approvalLoading.originals ? (
+              "Approving..."
+            ) : (
+              "Approve"
+            )}
+          </span>
+        </Button>
+      </Modal>
 
       {/* Deposit Confirmation Modal */}
-      {showDepositPrompt && (
-        <div className="fixed inset-0 bg-black/80 backdrop-blur-sm z-50 flex items-center justify-center p-4">
-          <div className="bg-neutral-900 border border-neutral-800 rounded-lg p-6 max-w-md w-full">
-            <h3 className="text-white text-lg font-semibold mb-4">
-              Confirm Deposit
-            </h3>
-            <p className="text-neutral-300 mb-6">
-              You are about to deposit {selectedNfts.size} Check
-              {selectedNfts.size !== 1 ? "s" : ""} to the Black Check One
-              contract. This action cannot be undone.
-            </p>
-
-            <div className="mb-6">
-              <div className="text-sm text-neutral-400 mb-2">
-                Selected Checks:
+      <Modal
+        isOpen={showDepositPrompt}
+        onClose={() => setShowDepositPrompt(false)}
+        title="Confirm Deposit"
+        subtitle={`You're about to deposit ${selectedNfts.size} Check${selectedNfts.size !== 1 ? "s" : ""} to the Black Check contract. You can withdraw them up until the Black check is created.`}
+        closeText="Cancel"
+        closeDisabled={depositLoading}
+        primaryText={depositLoading ? "Depositing..." : "Confirm Deposit"}
+        onPrimaryAction={performDeposit}
+        primaryDisabled={depositLoading}
+        primaryLoading={depositLoading}
+      >
+        <h3>Selected Checks:</h3>
+        <div className="max-h-36 overflow-y-auto space-y-1">
+          {Array.from(selectedNfts).map((identifier) => {
+            const nft = nfts.find((n) => n.identifier === identifier);
+            return (
+              <div key={identifier} className="flex items-center gap-1.5 text-sm">
+                <p className="text-white">#{identifier}</p>
+                <p>[{nft?.collection === "vv-checks-originals" ? "Original" : "Edition"}]</p>
               </div>
-              <div className="max-h-32 overflow-y-auto space-y-1">
-                {Array.from(selectedNfts).map((identifier) => {
-                  const nft = nfts.find((n) => n.identifier === identifier);
-                  return (
-                    <div
-                      key={identifier}
-                      className="flex items-center gap-2 text-sm text-neutral-300"
-                    >
-                      <span>#{identifier}</span>
-                      <span className="text-neutral-500">
-                        (
-                        {nft?.collection === "vv-checks-originals"
-                          ? "Original"
-                          : "Edition"}
-                        )
-                      </span>
-                    </div>
-                  );
-                })}
-              </div>
-            </div>
-
-            <div className="flex gap-3">
-              <Button
-                onClick={() => setShowDepositPrompt(false)}
-                variant="ghost"
-                className="flex-1"
-                disabled={depositLoading}
-              >
-                Cancel
-              </Button>
-              <Button
-                onClick={performDeposit}
-                variant="secondary"
-                className="flex-1"
-                disabled={depositLoading}
-              >
-                {depositLoading ? "Depositing..." : "Confirm Deposit"}
-              </Button>
-            </div>
-          </div>
+            );
+          })}
         </div>
-      )}
+      </Modal>
 
-      <div className="flex-1 overflow-y-auto overflow-x-hidden">
+      <div className="flex-1 overflow-y-auto w-full overflow-x-hidden">
         <div className="grid grid-cols-2">
           {nfts.map((nft, index) => {
             const isSelected = selectedNfts.has(nft.identifier);
@@ -512,20 +516,17 @@ export default function Tokens() {
             return (
               <button
                 key={nft.identifier}
-                className={`relative cursor-pointer mix-blend-lighten group border-b border-neutral-800 ${
-                  isEvenIndex ? "border-r border-neutral-800" : ""
-                } ${
-                  isLastItemOdd ? "border-b-0 border-r border-neutral-800" : ""
-                }`}
+                className={`relative cursor-pointer mix-blend-lighten group border-b border-neutral-800 ${isEvenIndex ? "border-r border-neutral-800" : ""
+                  } ${isLastItemOdd ? "border-b-0 border-r border-neutral-800" : ""
+                  }`}
                 onClick={() => toggleNftSelection(nft.identifier)}
               >
                 {(nft.display_image_url || nft.image_url) && (
                   <img
                     src={nft.display_image_url || nft.image_url}
                     alt={`Checks #${nft.identifier}`}
-                    className={`w-full h-full object-cover relative -my-4 group-hover:opacity-60 ${
-                      isSelected && "blur-[2px] opacity-60"
-                    }`}
+                    className={`w-full h-full object-cover relative -my-4 group-hover:opacity-60 ${isSelected && "blur-[2px] opacity-60"
+                      }`}
                     onError={(e) => {
                       // Hide broken images
                       e.currentTarget.style.display = "none";
@@ -546,8 +547,16 @@ export default function Tokens() {
         </div>
       </div>
       <div className="w-full h-14 flex-center bg-neutral-950/75 backdrop-blur-sm border-t border-neutral-800 flex-shrink-0">
-        <div className="w-full flex-between h-full">
-          {selectedNfts.size > 0 ? (
+        <div className="w-full flex justify-between h-full">
+          {!authenticated ? (
+            <Button
+              onClick={login}
+              variant="secondary"
+              className="flex-1 h-full"
+            >
+              Connect wallet to deposit checks
+            </Button>
+          ) : selectedNfts.size > 0 ? (
             <Button
               onClick={handleDeposit}
               variant="secondary"
@@ -564,15 +573,17 @@ export default function Tokens() {
               Select checks to deposit
             </Button>
           )}
-          <Button
-            variant="tertiary"
-            className="w-40 h-full border-l border-neutral-800"
-            onClick={handleSelectAllToggle}
-          >
-            {selectedNfts.size === nfts.length ? "Deselect all" : "Select all"}
-          </Button>
+          {authenticated && (
+            <Button
+              variant="tertiary"
+              className="w-40 h-full border-l border-neutral-800"
+              onClick={handleSelectAllToggle}
+            >
+              {selectedNfts.size === nfts.length ? "Deselect all" : "Select all"}
+            </Button>
+          )}
         </div>
       </div>
-    </div>
+    </>
   );
 }

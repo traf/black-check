@@ -6,7 +6,7 @@ export default function Footer() {
   const highlightedImages = Math.floor(progress * totalImages / 64);
   return (
     <footer className="flex-center bg-neutral-950 w-full h-14 border-t border-neutral-800 flex-shrink-0">
-      <div className="w-full h-full flex-between px-6 gap-4">
+      <div className="w-full h-full flex justify-between px-6 gap-4">
         <p className="text-sm">Black Check progress</p>
         <div className="flex-center gap-2">
           {Array.from({ length: totalImages }, (_, i) => (

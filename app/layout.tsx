@@ -17,6 +17,7 @@ const fk = localFont({
 });
 
 export const metadata: Metadata = {
+  metadataBase: new URL("https://blackcheckdao.com"),
   title: "Black Check",
   description: "✓",
   openGraph: {

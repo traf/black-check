@@ -7,24 +7,12 @@
 }
 
 @layer base {
-  h1 {
-    @apply font-sans text-4xl lg:text-5xl normal-case leading-tight tracking-tight;
-  }
-  p {
-    @apply text-neutral-400;
-  }
+  h1 { @apply font-sans text-4xl lg:text-5xl normal-case leading-tight tracking-tight; }
+  p { @apply text-neutral-400; }
 }
 
 @layer components {
-  .flex-center {
-    @apply flex items-center justify-center;
-  }
-  .flex-between {
-    @apply flex items-center justify-between;
-  }
-  .flex-end {
-    @apply flex items-start justify-end;
-  }
+  .flex-center { @apply flex items-center justify-center; }
 }
 
 /* Privy */
