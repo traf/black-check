@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { supabase } from "@/app/lib/supabase";
+import { BLACK_CHECK_ONE_SEPOLIA_ADDRESS } from "@/app/lib/constants";
 
 export interface FeedItem {
   id: string;
@@ -34,25 +35,15 @@ function getTimeAgo(timestamp: string): string {
 
 export async function GET() {
   try {
-    // Try to fetch from Transfer table first
-    let { data, error } = await supabase
+    // Fetch transfers to and from the BLACK_CHECK_ONE_SEPOLIA_ADDRESS
+    const { data, error } = await supabase
       .from("Transfer")
       .select("*")
+      .or(
+        `to.eq.${BLACK_CHECK_ONE_SEPOLIA_ADDRESS.toLowerCase()},from.eq.${BLACK_CHECK_ONE_SEPOLIA_ADDRESS.toLowerCase()}`
+      )
       .order("block_number", { ascending: false })
       .limit(50);
-
-    // If Transfer table doesn't exist, try feed_items as fallback
-    if (error && error.code === "42P01") {
-      console.log("Transfer table not found, trying feed_items...");
-      const fallbackResult = await supabase
-        .from("feed_items")
-        .select("*")
-        .order("created_at", { ascending: false })
-        .limit(50);
-
-      data = fallbackResult.data as any;
-      error = fallbackResult.error;
-    }
 
     if (error) {
       console.error("Supabase error:", error);
@@ -65,17 +56,20 @@ export async function GET() {
     // Transform the database data to match the FeedItem interface
     const feedData: FeedItem[] =
       (data as any[])?.map((item: any) => {
-        // Feed_items table structure (fallback)
+        const isDeposit =
+          item.to.toLowerCase() ===
+          BLACK_CHECK_ONE_SEPOLIA_ADDRESS.toLowerCase();
+
         return {
           id: item.id,
-          userAddress: item.to,
-          userName: item.user_name || undefined,
-          action: item.action,
-          checkCount: item.check_count,
+          userAddress: isDeposit ? item.from : item.to,
+          userName: undefined, // We don't have user names in the Transfer table
+          action: isDeposit ? "deposited" : "withdrew",
+          checkCount: item.token_id || 0,
           timestamp: item.block_timestamp,
           timeAgo: getTimeAgo(item.block_timestamp),
           transactionHash: item.transaction_hash,
-          checkImages: [],
+          checkImages: [], // We don't have check images in the Transfer table
         };
       }) || [];
 
