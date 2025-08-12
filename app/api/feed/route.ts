@@ -39,7 +39,6 @@ async function getCheckImage(tokenId: number): Promise<string | null> {
     process.env.NEXT_PUBLIC_APP_URL || "http://localhost:3000"
   }/api/check/${tokenId}`;
   try {
-    console.log("!!!", url);
     // Use absolute URL since this is a server-side API route
     const response = await fetch(url, {
       headers: {
@@ -91,7 +90,6 @@ export async function GET() {
       let checkImage = null;
       if (item.token_id) {
         checkImage = await getCheckImage(item.token_id);
-        console.log("!!!", checkImage);
       }
 
       feedData.push({

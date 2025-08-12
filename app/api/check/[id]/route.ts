@@ -59,7 +59,6 @@ export async function GET(
       // Use getNFTsForCollection to get NFTs from the collection
       const url = `${baseUrl}/getNFTs?contractAddress=${contractAddress}&withMetadata=true&limit=100&owner=${BLACK_CHECK_ONE_SEPOLIA_ADDRESS}`;
 
-      console.log("!!!", url);
       try {
         const response = await fetch(url, {
           method: "GET",
@@ -111,8 +110,6 @@ export async function GET(
         continue;
       }
     }
-
-    console.log("!!!", id);
 
     // If we get here, the check wasn't found in any collection
     return NextResponse.json({ error: "Check not found" }, { status: 404 });
