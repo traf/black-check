@@ -161,12 +161,15 @@ export default function Tokens() {
         functionName: "setApprovalForAll",
         args: [CONTRACT_ADDRESS as `0x${string}`, true],
         account: user.wallet.address as `0x${string}`,
+        chain:
+          process.env.NEXT_PUBLIC_NETWORK === "sepolia" ? sepolia : mainnet,
       });
 
       // Wait for transaction to be mined before updating status
       const publicClient = createPublicClient({
-        chain: sepolia,
-        transport: http(),
+        chain:
+          process.env.NEXT_PUBLIC_NETWORK === "sepolia" ? sepolia : mainnet,
+        transport: http(window.ethereum as any),
       });
 
       await publicClient.waitForTransactionReceipt({ hash });
@@ -281,12 +284,15 @@ export default function Tokens() {
         functionName: "contribute",
         args: [editionsTokenIds, originalsTokenIds],
         account: user.wallet.address as `0x${string}`,
+        chain:
+          process.env.NEXT_PUBLIC_NETWORK === "sepolia" ? sepolia : mainnet,
       });
 
       // Wait for transaction to be mined before updating status
       const publicClient = createPublicClient({
-        chain: sepolia,
-        transport: http(),
+        chain:
+          process.env.NEXT_PUBLIC_NETWORK === "sepolia" ? sepolia : mainnet,
+        transport: http(window.ethereum as any),
       });
 
       await publicClient.waitForTransactionReceipt({ hash });
