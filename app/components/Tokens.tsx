@@ -22,14 +22,24 @@ interface NFT {
   display_image_url: string;
 }
 
-interface DepositedNFT {
+export interface DepositedNFT {
   tokenId: number;
   from: string;
   to: string;
+  tokenAddress: string;
   transactionHash: string;
   blockNumber: number;
   blockTimestamp: number;
   id: string;
+  // Add NFT metadata fields
+  name?: string;
+  description?: string;
+  imageUrl?: string;
+  displayImageUrl?: string;
+  collection?: string;
+  contract?: string;
+  tokenStandard?: string;
+  metadata?: any;
 }
 
 export default function Tokens() {
@@ -700,7 +710,7 @@ export default function Tokens() {
                 // For deposited NFTs, we need to get image URLs from the original API
                 const displayImage =
                   activeTab === "withdraw"
-                    ? `/placeholder-check-${(parseInt(identifier) % 2) + 1}.svg`
+                    ? (nft as DepositedNFT).imageUrl
                     : (nft as NFT).display_image_url || (nft as NFT).image_url;
 
                 return (
