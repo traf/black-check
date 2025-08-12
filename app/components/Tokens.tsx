@@ -762,11 +762,11 @@ export default function Tokens() {
             Connect wallet to deposit or withdraw checks
           </Button>
         ) : (
-          <div className="w-full flex h-full divide-x divide-neutral-800">
+          <div className="w-full flex h-full">
             <Button
               onClick={() => setActiveTab("deposit")}
               variant={activeTab === "deposit" ? "secondary" : "ghost"}
-              className={`flex-1 h-full !text-neutral-400 ${
+              className={`flex-1 h-full !text-neutral-400 border-r border-neutral-800 ${
                 activeTab === "deposit"
                   ? "!text-white pointer-events-none"
                   : "hover:bg-transparent"
