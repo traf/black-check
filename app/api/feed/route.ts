@@ -11,6 +11,7 @@ export interface FeedItem {
   timestamp: string;
   timeAgo: string;
   transactionHash: string;
+  tokenAddress: string;
   checkImages: string[];
 }
 
@@ -31,6 +32,31 @@ function getTimeAgo(timestamp: string): string {
     const days = Math.floor(diffInSeconds / 86400);
     return `${days}d ago`;
   }
+}
+
+async function getCheckImage(tokenId: number): Promise<string | null> {
+  const url = `${
+    process.env.NEXT_PUBLIC_APP_URL || "http://localhost:3000"
+  }/api/check/${tokenId}`;
+  try {
+    console.log("!!!", url);
+    // Use absolute URL since this is a server-side API route
+    const response = await fetch(url, {
+      headers: {
+        Accept: "application/json",
+      },
+    });
+
+    if (response.ok) {
+      const checkData = await response.json();
+      return checkData.image_url || null;
+    } else {
+      console.warn(`Failed to fetch check ${tokenId}: ${response.status}`);
+    }
+  } catch (error) {
+    console.error(`Error fetching check image for token ${tokenId}:`, error);
+  }
+  return null;
 }
 
 export async function GET() {
@@ -54,24 +80,33 @@ export async function GET() {
     }
 
     // Transform the database data to match the FeedItem interface
-    const feedData: FeedItem[] =
-      (data as any[])?.map((item: any) => {
-        const isDeposit =
-          item.to.toLowerCase() ===
-          BLACK_CHECK_ONE_SEPOLIA_ADDRESS.toLowerCase();
+    const feedData: FeedItem[] = [];
 
-        return {
-          id: item.id,
-          userAddress: isDeposit ? item.from : item.to,
-          userName: undefined, // We don't have user names in the Transfer table
-          action: isDeposit ? "deposited" : "withdrew",
-          checkCount: item.token_id || 0,
-          timestamp: item.block_timestamp,
-          timeAgo: getTimeAgo(item.block_timestamp),
-          transactionHash: item.transaction_hash,
-          checkImages: [], // We don't have check images in the Transfer table
-        };
-      }) || [];
+    for (const item of data || []) {
+      const isDeposit =
+        item.to?.toLowerCase() ===
+        BLACK_CHECK_ONE_SEPOLIA_ADDRESS.toLowerCase();
+
+      // Fetch check image if we have a token_id
+      let checkImage = null;
+      if (item.token_id) {
+        checkImage = await getCheckImage(item.token_id);
+        console.log("!!!", checkImage);
+      }
+
+      feedData.push({
+        id: item.id,
+        userAddress: isDeposit ? item.from! : item.to!,
+        userName: undefined, // We don't have user names in the Transfer table
+        action: isDeposit ? "deposited" : "withdrew",
+        checkCount: 1,
+        timestamp: item.block_timestamp?.toString() || "",
+        timeAgo: getTimeAgo(item.block_timestamp?.toString() || ""),
+        transactionHash: item.transaction_hash || "",
+        tokenAddress: item.token_address || "",
+        checkImages: checkImage ? [checkImage] : [],
+      });
+    }
 
     return NextResponse.json({
       success: true,

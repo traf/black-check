@@ -471,6 +471,7 @@ export type Database = {
           operation: number
           operation_id: number
           to: string | null
+          token_address: string | null
           token_id: number | null
           transaction_hash: string | null
         }
@@ -483,6 +484,7 @@ export type Database = {
           operation: number
           operation_id?: number
           to?: string | null
+          token_address?: string | null
           token_id?: number | null
           transaction_hash?: string | null
         }
@@ -495,6 +497,7 @@ export type Database = {
           operation?: number
           operation_id?: number
           to?: string | null
+          token_address?: string | null
           token_id?: number | null
           transaction_hash?: string | null
         }
@@ -819,6 +822,7 @@ export type Database = {
           from: string | null
           id: string
           to: string | null
+          token_address: string | null
           token_id: number | null
           transaction_hash: string | null
         }
@@ -828,6 +832,7 @@ export type Database = {
           from?: string | null
           id: string
           to?: string | null
+          token_address?: string | null
           token_id?: number | null
           transaction_hash?: string | null
         }
@@ -837,6 +842,7 @@ export type Database = {
           from?: string | null
           id?: string
           to?: string | null
+          token_address?: string | null
           token_id?: number | null
           transaction_hash?: string | null
         }

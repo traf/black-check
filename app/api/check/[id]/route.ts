@@ -1,4 +1,5 @@
 import {
+  BLACK_CHECK_ONE_SEPOLIA_ADDRESS,
   CHECKS_EDITIONS_MAINNET_ADDRESS,
   CHECKS_EDITIONS_SEPOLIA_ADDRESS,
   CHECKS_ORIGINALS_MAINNET_ADDRESS,
@@ -56,8 +57,9 @@ export async function GET(
     // Try to find the check in each collection
     for (const contractAddress of COLLECTION_CONTRACTS) {
       // Use getNFTsForCollection to get NFTs from the collection
-      const url = `${baseUrl}/getNFTs?contractAddress=${contractAddress}&withMetadata=true&limit=100`;
+      const url = `${baseUrl}/getNFTs?contractAddress=${contractAddress}&withMetadata=true&limit=100&owner=${BLACK_CHECK_ONE_SEPOLIA_ADDRESS}`;
 
+      console.log("!!!", url);
       try {
         const response = await fetch(url, {
           method: "GET",
@@ -69,15 +71,13 @@ export async function GET(
         if (response.ok) {
           const data = await response.json();
 
-          if (data.nfts && data.nfts.length > 0) {
+          if (data.ownedNfts && data.ownedNfts.length > 0) {
             // Find the specific NFT with the matching token ID
-            const targetNft = data.nfts.find(
+            const targetNft = data.ownedNfts.find(
               (nft: any) => BigInt(nft.id.tokenId).toString() === id
             );
 
             if (targetNft) {
-              console.log("!!!", targetNft);
-
               // Transform Alchemy response to match expected format
               const transformedCheck = {
                 identifier: BigInt(targetNft.id.tokenId).toString(),
@@ -111,6 +111,8 @@ export async function GET(
         continue;
       }
     }
+
+    console.log("!!!", id);
 
     // If we get here, the check wasn't found in any collection
     return NextResponse.json({ error: "Check not found" }, { status: 404 });
