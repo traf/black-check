@@ -74,7 +74,7 @@ export default function Home() {
         <div className="flex flex-col w-full h-full relative p-4 lg:p-0 overflow-y-auto">
           <div className="flex flex-col justify-end p-4 sm:p-12 mt-auto">
             <Badge
-              title={fundingCompleted ? "Funding completed... Black check ready to composite!" : "Funding active... More checks needed to composite"}
+              title={process.env.NEXT_PUBLIC_NETWORK === 'sepolia' ? "Testnet active" : (fundingCompleted ? "Funding completed... Black check ready to composite!" : "Funding active... More checks needed to composite")}
               loading={fundingLoading}
               error={fundingError || undefined}
               completed={fundingCompleted || false}
