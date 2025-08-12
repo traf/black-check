@@ -2,6 +2,17 @@ import { NextRequest, NextResponse } from "next/server";
 import { supabase } from "@/app/lib/supabase";
 import { BLACK_CHECK_ONE_SEPOLIA_ADDRESS } from "@/app/lib/constants";
 
+export interface DepositedNFT {
+  tokenId: number;
+  from: string;
+  to: string;
+  tokenAddress: string;
+  transactionHash: string;
+  blockNumber: number;
+  blockTimestamp: number;
+  id: string;
+}
+
 export async function GET(
   request: NextRequest,
   { params }: { params: Promise<{ address: string }> }
@@ -43,14 +54,15 @@ export async function GET(
     }
 
     // Transform the transfer data into deposited NFTs format
-    const depositedNFTs =
+    const depositedNFTs: DepositedNFT[] =
       transfers?.map((transfer) => ({
-        tokenId: transfer.token_id,
-        from: transfer.from,
-        to: transfer.to,
-        transactionHash: transfer.transaction_hash,
-        blockNumber: transfer.block_number,
-        blockTimestamp: transfer.block_timestamp,
+        tokenId: transfer.token_id || 0,
+        from: transfer.from || "",
+        to: transfer.to || "",
+        tokenAddress: transfer.token_address || "",
+        transactionHash: transfer.transaction_hash || "",
+        blockNumber: transfer.block_number || 0,
+        blockTimestamp: transfer.block_timestamp || 0,
         id: transfer.id,
       })) || [];
 
