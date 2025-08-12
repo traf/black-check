@@ -74,17 +74,17 @@ export default function Home() {
         <div className="flex flex-col w-full h-full relative p-4 lg:p-0 overflow-y-auto">
           <div className="flex flex-col justify-end p-4 sm:p-12 mt-auto">
             <Badge
-              title={fundingCompleted ? "Funding completed... Black check ready to composite!" : "Funding active... More checks needed to composite."}
+              title={fundingCompleted ? "Funding completed... Black check ready to composite!" : "Funding active... More checks needed to composite"}
               loading={fundingLoading}
               error={fundingError || undefined}
               completed={fundingCompleted || false}
             />
             {authenticated ? (
-              <h1 className="text-balance mt-6 mb-12">
+              <h1 className="text-balance mt-8 mb-12">
                 Select some checks to deposit into the contract.
               </h1>
             ) : (
-              <h1 className="text-balance mt-6 mb-12">
+              <h1 className="text-balance mt-8 mb-12">
                 The Black Check — web3's ultimate artifact.
               </h1>
             )}
@@ -122,6 +122,7 @@ export default function Home() {
             return `${totalCount} checks deposited`;
           })()}
           <p>
+            {/* this should reflect actual progress not just / 4096 */}
             {(() => {
               const allChecks = [level0Checks, level1Checks, level2Checks, level3Checks, level4Checks];
               const totalCount = allChecks.reduce((total, level) => total + (level.checks?.length || 0), 0);
