@@ -57,7 +57,7 @@ export default function Feed() {
                   )}`}
               </span>{" "}
               {item.action} {item.checkCount} check
-              {item.checkCount !== 1 ? "s" : ""}
+              {item.checkCount !== 1 ? "s" : ""} (#{item.tokenId})
             </p>
             <p className="flex-shrink-0">{item.timeAgo}</p>
             <a

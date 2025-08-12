@@ -12,6 +12,7 @@ export interface FeedItem {
   timeAgo: string;
   transactionHash: string;
   tokenAddress: string;
+  tokenId: number;
   checkImages: string[];
 }
 
@@ -98,6 +99,7 @@ export async function GET() {
         userName: undefined, // We don't have user names in the Transfer table
         action: isDeposit ? "deposited" : "withdrew",
         checkCount: 1,
+        tokenId: item.token_id || 0,
         timestamp: item.block_timestamp?.toString() || "",
         timeAgo: getTimeAgo(item.block_timestamp?.toString() || ""),
         transactionHash: item.transaction_hash || "",
