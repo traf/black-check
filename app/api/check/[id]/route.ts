@@ -40,7 +40,7 @@ export async function GET(
     }
 
     // Determine network from environment variable
-    const network = process.env.NETWORK || "mainnet";
+    const network = process.env.NEXT_PUBLIC_NETWORK || "mainnet";
     const baseUrl =
       network === "sepolia"
         ? `https://eth-sepolia.g.alchemy.com/nft/v2/${alchemyApiKey}`

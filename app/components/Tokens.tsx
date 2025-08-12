@@ -3,7 +3,7 @@
 import { usePrivy, useLogin } from "@privy-io/react-auth";
 import { useState, useEffect, useCallback } from "react";
 import { createWalletClient, createPublicClient, custom, http } from "viem";
-import { sepolia } from "viem/chains";
+import { mainnet, sepolia } from "viem/chains";
 import Check from "./Check";
 import Button from "./Button";
 import Modal from "./Modal";
@@ -22,15 +22,25 @@ interface NFT {
   display_image_url: string;
 }
 
+interface DepositedNFT {
+  tokenId: number;
+  from: string;
+  to: string;
+  transactionHash: string;
+  blockNumber: number;
+  blockTimestamp: number;
+  id: string;
+}
+
 export default function Tokens() {
   const { user, ready, authenticated } = usePrivy();
   const { login } = useLogin();
   const [nfts, setNfts] = useState<NFT[]>([]);
-  const [depositedNfts, setDepositedNfts] = useState<NFT[]>([]);
+  const [depositedNfts, setDepositedNfts] = useState<DepositedNFT[]>([]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [selectedNfts, setSelectedNfts] = useState<Set<string>>(new Set());
-  const [activeTab, setActiveTab] = useState<'deposit' | 'withdraw'>('deposit');
+  const [activeTab, setActiveTab] = useState<"deposit" | "withdraw">("deposit");
   const [approvalStatus, setApprovalStatus] = useState<{
     editions: boolean;
     originals: boolean;
@@ -58,13 +68,21 @@ export default function Tokens() {
   };
 
   const handleSelectAllToggle = () => {
-    const currentNfts = activeTab === 'deposit' ? nfts : depositedNfts;
+    const currentNfts = activeTab === "deposit" ? nfts : depositedNfts;
     if (selectedNfts.size === currentNfts.length) {
       // All selected, deselect all
       setSelectedNfts(new Set());
     } else {
       // Not all selected, select all
-      setSelectedNfts(new Set(currentNfts.map((nft) => nft.identifier)));
+      setSelectedNfts(
+        new Set(
+          currentNfts.map((nft) =>
+            activeTab === "deposit"
+              ? (nft as NFT).identifier
+              : (nft as DepositedNFT).tokenId.toString()
+          )
+        )
+      );
     }
   };
 
@@ -118,8 +136,7 @@ export default function Tokens() {
     if (!user?.wallet?.address) return;
 
     try {
-
-      setApprovalLoading(prev => ({ ...prev, [contractType]: true }));
+      setApprovalLoading((prev) => ({ ...prev, [contractType]: true }));
       setError(null);
 
       if (!window.ethereum) {
@@ -146,8 +163,6 @@ export default function Tokens() {
         account: user.wallet.address as `0x${string}`,
       });
 
-
-
       // Wait for transaction to be mined before updating status
       const publicClient = createPublicClient({
         chain: sepolia,
@@ -171,8 +186,7 @@ export default function Tokens() {
       setError(`Failed to approve ${contractType}. Please try again.`);
       throw err;
     } finally {
-
-      setApprovalLoading(prev => ({ ...prev, [contractType]: false }));
+      setApprovalLoading((prev) => ({ ...prev, [contractType]: false }));
     }
   };
 
@@ -269,8 +283,6 @@ export default function Tokens() {
         account: user.wallet.address as `0x${string}`,
       });
 
-
-
       // Wait for transaction to be mined before updating status
       const publicClient = createPublicClient({
         chain: sepolia,
@@ -312,12 +324,19 @@ export default function Tokens() {
       }
 
       const walletClient = createWalletClient({
-        chain: sepolia,
+        chain:
+          process.env.NEXT_PUBLIC_NETWORK === "sepolia"
+            ? sepolia
+            : process.env.NEXT_PUBLIC_NETWORK === "mainnet"
+            ? mainnet
+            : sepolia,
         transport: custom(window.ethereum as any),
       });
 
       // Get all selected token IDs (the refund function takes a simple array of token IDs)
-      const selectedTokenIds = Array.from(selectedNfts).map((identifier) => BigInt(identifier));
+      const selectedTokenIds = Array.from(selectedNfts).map((identifier) =>
+        BigInt(identifier)
+      );
 
       // Call the refund function
       const hash = await walletClient.writeContract({
@@ -326,12 +345,23 @@ export default function Tokens() {
         functionName: "refund",
         args: [selectedTokenIds],
         account: user.wallet.address as `0x${string}`,
+        chain:
+          process.env.NEXT_PUBLIC_NETWORK === "sepolia"
+            ? sepolia
+            : process.env.NEXT_PUBLIC_NETWORK === "mainnet"
+            ? mainnet
+            : sepolia,
       });
 
       // Wait for transaction to be mined
       const publicClient = createPublicClient({
-        chain: sepolia,
-        transport: http(),
+        chain:
+          process.env.NEXT_PUBLIC_NETWORK === "sepolia"
+            ? sepolia
+            : process.env.NEXT_PUBLIC_NETWORK === "mainnet"
+            ? mainnet
+            : sepolia,
+        transport: http(window.ethereum as any),
       });
 
       await publicClient.waitForTransactionReceipt({ hash });
@@ -401,10 +431,18 @@ export default function Tokens() {
     if (!user?.wallet?.address) return;
 
     try {
-      // Note: The current contract doesn't have getter functions for deposited tokens
-      // For now, we'll show empty state in withdraw tab
-      // This would need to be implemented by tracking deposits via events or contract updates
-      setDepositedNfts([]);
+      // Fetch deposited NFTs from our API route
+      const response = await fetch(
+        `/api/deposited-nfts/${user.wallet.address}`
+      );
+
+      if (response.ok) {
+        const data = await response.json();
+        setDepositedNfts(data.depositedNfts || []);
+      } else {
+        console.error("Failed to fetch deposited NFTs:", response.status);
+        setDepositedNfts([]);
+      }
     } catch (err) {
       console.error("Error fetching deposited NFTs:", err);
       setDepositedNfts([]);
@@ -442,11 +480,7 @@ export default function Tokens() {
           <img src="/check-token.png" alt="black check" className="w-72" />
         </div>
         <div className="w-full flex-center bg-neutral-950/75 backdrop-blur-sm border-t border-neutral-800 flex-shrink-0">
-          <Button
-            onClick={login}
-            variant="ghost"
-            className="flex-1 h-14"
-          >
+          <Button onClick={login} variant="ghost" className="flex-1 h-14">
             Connect wallet to deposit or withdraw checks
           </Button>
         </div>
@@ -470,16 +504,18 @@ export default function Tokens() {
   }
 
   // Handle empty states
-  const currentNfts = activeTab === 'deposit' ? nfts : depositedNfts;
+  const currentNfts = activeTab === "deposit" ? nfts : depositedNfts;
   const isEmpty = currentNfts.length === 0;
 
   const EmptyState = () => (
     <div className="flex-center flex-col gap-8 h-full">
       <Check variant="x" className="w-12" />
       <p className="text-white text-balance text-center">
-        No Checks to withdraw.
+        {activeTab === "deposit"
+          ? "No Checks to deposit."
+          : "No Checks to withdraw."}
       </p>
-      {activeTab === 'deposit' && (
+      {activeTab === "deposit" && (
         <Button
           href="https://opensea.io/collection/vv-checks-originals"
           target="_blank"
@@ -507,7 +543,6 @@ export default function Tokens() {
         }}
         primaryDisabled={!approvalStatus.editions || !approvalStatus.originals}
       >
-
         <Button
           onClick={async () => {
             if (approvalStatus.editions) return;
@@ -572,7 +607,9 @@ export default function Tokens() {
         isOpen={showDepositPrompt}
         onClose={() => setShowDepositPrompt(false)}
         title="Confirm Deposit"
-        subtitle={`You're about to deposit ${selectedNfts.size} Check${selectedNfts.size !== 1 ? "s" : ""} to the Black Check contract. You can withdraw them up until the Black check is created.`}
+        subtitle={`You're about to deposit ${selectedNfts.size} Check${
+          selectedNfts.size !== 1 ? "s" : ""
+        } to the Black Check contract. You can withdraw them up until the Black check is created.`}
         closeText="Cancel"
         closeDisabled={depositLoading}
         primaryText={depositLoading ? "Depositing..." : "Confirm Deposit"}
@@ -585,9 +622,18 @@ export default function Tokens() {
           {Array.from(selectedNfts).map((identifier) => {
             const nft = nfts.find((n) => n.identifier === identifier);
             return (
-              <div key={identifier} className="flex items-center gap-1.5 text-sm">
+              <div
+                key={identifier}
+                className="flex items-center gap-1.5 text-sm"
+              >
                 <p className="text-white">#{identifier}</p>
-                <p>[{nft?.collection === "vv-checks-originals" ? "Original" : "Edition"}]</p>
+                <p>
+                  [
+                  {nft?.collection === "vv-checks-originals"
+                    ? "Original"
+                    : "Edition"}
+                  ]
+                </p>
               </div>
             );
           })}
@@ -599,7 +645,9 @@ export default function Tokens() {
         isOpen={showWithdrawPrompt}
         onClose={() => setShowWithdrawPrompt(false)}
         title="Confirm Withdraw"
-        subtitle={`You're about to withdraw ${selectedNfts.size} Check${selectedNfts.size !== 1 ? "s" : ""} from the Black Check contract.`}
+        subtitle={`You're about to withdraw ${selectedNfts.size} Check${
+          selectedNfts.size !== 1 ? "s" : ""
+        } from the Black Check contract.`}
         closeText="Cancel"
         closeDisabled={withdrawLoading}
         primaryText={withdrawLoading ? "Withdrawing..." : "Confirm Withdraw"}
@@ -610,11 +658,16 @@ export default function Tokens() {
         <h3>Selected Checks:</h3>
         <div className="max-h-36 overflow-y-auto space-y-1">
           {Array.from(selectedNfts).map((identifier) => {
-            const nft = depositedNfts.find((n) => n.identifier === identifier);
+            const nft = depositedNfts.find(
+              (n) => n.tokenId.toString() === identifier
+            );
             return (
-              <div key={identifier} className="flex items-center gap-1.5 text-sm">
+              <div
+                key={identifier}
+                className="flex items-center gap-1.5 text-sm"
+              >
                 <p className="text-white">#{identifier}</p>
-                <p>[{nft?.collection === "vv-checks-originals" ? "Original" : "Edition"}]</p>
+                <p>[Deposited]</p>
               </div>
             );
           })}
@@ -628,30 +681,41 @@ export default function Tokens() {
           <div className="flex-1 overflow-y-auto w-full overflow-x-hidden">
             <div className="grid grid-cols-2">
               {currentNfts.map((nft, index) => {
-                const isSelected = selectedNfts.has(nft.identifier);
+                const identifier =
+                  activeTab === "deposit"
+                    ? (nft as NFT).identifier
+                    : (nft as DepositedNFT).tokenId.toString();
+                const isSelected = selectedNfts.has(identifier);
                 const isEvenIndex = index % 2 === 0;
                 const isLastItemOdd =
-                  currentNfts.length % 2 === 1 && index === currentNfts.length - 1;
+                  currentNfts.length % 2 === 1 &&
+                  index === currentNfts.length - 1;
 
                 // For deposited NFTs, we need to get image URLs from the original API
-                const displayImage = activeTab === 'withdraw'
-                  ? `/placeholder-check-${(parseInt(nft.identifier) % 2) + 1}.svg`
-                  : (nft.display_image_url || nft.image_url);
+                const displayImage =
+                  activeTab === "withdraw"
+                    ? `/placeholder-check-${(parseInt(identifier) % 2) + 1}.svg`
+                    : (nft as NFT).display_image_url || (nft as NFT).image_url;
 
                 return (
                   <button
-                    key={nft.identifier}
-                    className={`relative cursor-pointer mix-blend-lighten group border-b border-neutral-800 ${isEvenIndex ? "border-r border-neutral-800" : ""
-                      } ${isLastItemOdd ? "border-b-0 border-r border-neutral-800" : ""
-                      }`}
-                    onClick={() => toggleNftSelection(nft.identifier)}
+                    key={identifier}
+                    className={`relative cursor-pointer mix-blend-lighten group border-b border-neutral-800 ${
+                      isEvenIndex ? "border-r border-neutral-800" : ""
+                    } ${
+                      isLastItemOdd
+                        ? "border-b-0 border-r border-neutral-800"
+                        : ""
+                    }`}
+                    onClick={() => toggleNftSelection(identifier)}
                   >
                     {displayImage && (
                       <img
                         src={displayImage}
-                        alt={`Checks #${nft.identifier}`}
-                        className={`w-full h-full object-cover relative -my-4 group-hover:opacity-60 ${isSelected && "blur-[2px] opacity-60"
-                          }`}
+                        alt={`Checks #${identifier}`}
+                        className={`w-full h-full object-cover relative -my-4 group-hover:opacity-60 ${
+                          isSelected && "blur-[2px] opacity-60"
+                        }`}
                         onError={(e) => {
                           // Hide broken images
                           e.currentTarget.style.display = "none";
@@ -659,7 +723,7 @@ export default function Tokens() {
                       />
                     )}
                     <p className="absolute bottom-6 w-full text-center">
-                      #{nft.identifier}
+                      #{identifier}
                     </p>
                     {isSelected && (
                       <div className="absolute left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2">
@@ -681,11 +745,12 @@ export default function Tokens() {
       {authenticated && selectedNfts.size > 0 && (
         <div className="w-full h-14 flex-center bg-neutral-950/75 backdrop-blur-sm border-t border-neutral-800 flex-shrink-0">
           <Button
-            onClick={activeTab === 'deposit' ? handleDeposit : handleWithdraw}
+            onClick={activeTab === "deposit" ? handleDeposit : handleWithdraw}
             variant="primary"
             className="flex-1 h-full"
           >
-            {activeTab === 'deposit' ? 'Deposit' : 'Withdraw'} {selectedNfts.size} check
+            {activeTab === "deposit" ? "Deposit" : "Withdraw"}{" "}
+            {selectedNfts.size} check
             {selectedNfts.size !== 1 ? "s" : ""}
           </Button>
         </div>
@@ -693,26 +758,30 @@ export default function Tokens() {
 
       <div className="w-full h-14 flex-center bg-neutral-950/75 backdrop-blur-sm border-t border-neutral-800 flex-shrink-0">
         {!authenticated ? (
-          <Button
-            onClick={login}
-            variant="secondary"
-            className="flex-1 h-full"
-          >
+          <Button onClick={login} variant="secondary" className="flex-1 h-full">
             Connect wallet to deposit or withdraw checks
           </Button>
         ) : (
           <div className="w-full flex h-full divide-x divide-neutral-800">
             <Button
-              onClick={() => setActiveTab('deposit')}
-              variant={activeTab === 'deposit' ? 'secondary' : 'ghost'}
-              className={`flex-1 h-full !text-neutral-400 ${activeTab === 'deposit' ? '!text-white pointer-events-none' : 'hover:bg-transparent'}`}
+              onClick={() => setActiveTab("deposit")}
+              variant={activeTab === "deposit" ? "secondary" : "ghost"}
+              className={`flex-1 h-full !text-neutral-400 ${
+                activeTab === "deposit"
+                  ? "!text-white pointer-events-none"
+                  : "hover:bg-transparent"
+              }`}
             >
               Deposit
             </Button>
             <Button
-              onClick={() => setActiveTab('withdraw')}
-              variant={activeTab === 'withdraw' ? 'secondary' : 'ghost'}
-              className={`flex-1 h-full !text-neutral-400 ${activeTab === 'withdraw' ? '!text-white pointer-events-none' : 'hover:bg-transparent'}`}
+              onClick={() => setActiveTab("withdraw")}
+              variant={activeTab === "withdraw" ? "secondary" : "ghost"}
+              className={`flex-1 h-full !text-neutral-400 ${
+                activeTab === "withdraw"
+                  ? "!text-white pointer-events-none"
+                  : "hover:bg-transparent"
+              }`}
             >
               Withdraw
             </Button>
