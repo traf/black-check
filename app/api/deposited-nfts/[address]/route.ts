@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { supabase } from "@/app/lib/supabase";
 import { BLACK_CHECK_ONE_SEPOLIA_ADDRESS } from "@/app/lib/constants";
 import { DepositedNFT } from "@/app/components/Tokens";
+import { zeroAddress } from "viem";
 
 export async function GET(
   request: NextRequest,
@@ -48,6 +49,20 @@ export async function GET(
 
     if (transfers) {
       for (const transfer of transfers) {
+        // Find the corresponding NFT that was sent back to the user
+        // This would be where from=contract and to=user with matching transaction_hash
+        const { data: receivedNFTs, error: receivedError } = await supabase
+          .from("Transfer")
+          .select("token_id")
+          .eq("from", zeroAddress)
+          .eq("to", address.toLowerCase())
+          .eq("transaction_hash", transfer.transaction_hash || "");
+
+        let receivedTokenId: number | null = null;
+        if (!receivedError && receivedNFTs && receivedNFTs.length > 0) {
+          receivedTokenId = receivedNFTs[0].token_id || null;
+        }
+
         const baseNFT: DepositedNFT = {
           tokenId: transfer.token_id || 0,
           from: transfer.from || "",
@@ -56,7 +71,8 @@ export async function GET(
           transactionHash: transfer.transaction_hash || "",
           blockNumber: transfer.block_number || 0,
           blockTimestamp: transfer.block_timestamp || 0,
-          id: transfer.id,
+          id: transfer.id || "",
+          receivedTokenId: receivedTokenId, // Add the received token ID
         };
 
         // Try to fetch additional NFT metadata from the check API

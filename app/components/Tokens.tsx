@@ -31,6 +31,7 @@ export interface DepositedNFT {
   blockNumber: number;
   blockTimestamp: number;
   id: string;
+  receivedTokenId?: number | null; // Token ID of the NFT received for this deposit
   // Add NFT metadata fields
   name?: string;
   description?: string;
@@ -416,16 +417,17 @@ export default function Tokens() {
 
   const handleWithdraw = async () => {
     if (!user?.wallet?.address || selectedNfts.size === 0) return;
+
     setShowWithdrawPrompt(true);
   };
 
   const performWithdraw = async () => {
     if (!user?.wallet?.address) return;
 
-    try {
-      setWithdrawLoading(true);
-      setError(null);
+    setWithdrawLoading(true);
+    setError(null);
 
+    try {
       if (!window.ethereum) {
         throw new Error("No Ethereum provider found");
       }
@@ -443,17 +445,36 @@ export default function Tokens() {
       // Check and switch chain if needed
       await checkAndSwitchChain();
 
-      // Get all selected token IDs (the refund function takes a simple array of token IDs)
-      const selectedTokenIds = Array.from(selectedNfts).map((identifier) =>
-        BigInt(identifier)
-      );
+      // Get the received token IDs directly from the selected deposited NFTs
+      const receivedTokenIds: bigint[] = [];
 
-      // Call the refund function
+      for (const selectedIdentifier of selectedNfts) {
+        // Find the corresponding deposited NFT to get the receivedTokenId
+        const depositedNFT = depositedNfts.find(
+          (nft) => nft.tokenId.toString() === selectedIdentifier
+        );
+
+        if (depositedNFT?.receivedTokenId) {
+          receivedTokenIds.push(BigInt(depositedNFT.receivedTokenId));
+        } else {
+          console.warn(
+            `No received token ID found for deposited NFT ${selectedIdentifier}`
+          );
+        }
+      }
+
+      if (receivedTokenIds.length === 0) {
+        throw new Error(
+          "No valid received token IDs found for the selected deposited NFTs"
+        );
+      }
+
+      // Call the refund function with the received token IDs
       const hash = await walletClient.writeContract({
         address: CONTRACT_ADDRESS as `0x${string}`,
         abi: BLACK_CHECK_ONE_ABI,
         functionName: "refund",
-        args: [selectedTokenIds],
+        args: [receivedTokenIds],
         account: user.wallet.address as `0x${string}`,
         chain:
           process.env.NEXT_PUBLIC_NETWORK === "sepolia"
@@ -464,7 +485,7 @@ export default function Tokens() {
       });
 
       // Wait for transaction to be mined
-      const publicClient = createPublicClient({
+      const publicClientForReceipt = createPublicClient({
         chain:
           process.env.NEXT_PUBLIC_NETWORK === "sepolia"
             ? sepolia
@@ -474,7 +495,7 @@ export default function Tokens() {
         transport: http(window.ethereum as any),
       });
 
-      await publicClient.waitForTransactionReceipt({ hash });
+      await publicClientForReceipt.waitForTransactionReceipt({ hash });
 
       // Clear selected NFTs after successful withdrawal
       setSelectedNfts(new Set());
