@@ -64,6 +64,91 @@ export default function Tokens() {
   });
   const [depositLoading, setDepositLoading] = useState(false);
   const [withdrawLoading, setWithdrawLoading] = useState(false);
+  const [chainSwitching, setChainSwitching] = useState(false);
+  const [wrongNetwork, setWrongNetwork] = useState(false);
+
+  // Chain switching utilities
+  const getTargetChain = () => {
+    return process.env.NEXT_PUBLIC_NETWORK === "sepolia" ? sepolia : mainnet;
+  };
+
+  const checkCurrentChain = async () => {
+    if (!window.ethereum) return;
+
+    try {
+      const targetChain = getTargetChain();
+      const currentChainId = await (window.ethereum as any).request({
+        method: "eth_chainId",
+      });
+      const isCorrectChain =
+        currentChainId === `0x${targetChain.id.toString(16)}`;
+      setWrongNetwork(!isCorrectChain);
+    } catch (error) {
+      console.error("Error checking current chain:", error);
+    }
+  };
+
+  const checkAndSwitchChain = async () => {
+    if (!window.ethereum) {
+      throw new Error("No Ethereum provider found");
+    }
+
+    const targetChain = getTargetChain();
+    const currentChainId = await (window.ethereum as any).request({
+      method: "eth_chainId",
+    });
+
+    if (currentChainId !== `0x${targetChain.id.toString(16)}`) {
+      setChainSwitching(true);
+      try {
+        // Try to switch to the target chain
+        await (window.ethereum as any).request({
+          method: "wallet_switchEthereumChain",
+          params: [{ chainId: `0x${targetChain.id.toString(16)}` }],
+        });
+      } catch (switchError: any) {
+        // If the chain is not added to the wallet, add it
+        if (switchError.code === 4902) {
+          try {
+            await (window.ethereum as any).request({
+              method: "wallet_addEthereumChain",
+              params: [
+                {
+                  chainId: `0x${targetChain.id.toString(16)}`,
+                  chainName: targetChain.name,
+                  nativeCurrency: targetChain.nativeCurrency,
+                  rpcUrls: targetChain.rpcUrls.default.http,
+                  blockExplorerUrls: targetChain.blockExplorers
+                    ? [targetChain.blockExplorers.default.url]
+                    : undefined,
+                },
+              ],
+            });
+          } catch (addError: any) {
+            if (addError.code === 4001) {
+              throw new Error(
+                "User rejected adding the network to their wallet"
+              );
+            } else {
+              throw new Error(
+                `Failed to add network: ${addError.message || "Unknown error"}`
+              );
+            }
+          }
+        } else if (switchError.code === 4001) {
+          throw new Error("User rejected switching to the required network");
+        } else {
+          throw new Error(
+            `Failed to switch network: ${
+              switchError.message || "Unknown error"
+            }`
+          );
+        }
+      } finally {
+        setChainSwitching(false);
+      }
+    }
+  };
 
   const toggleNftSelection = (identifier: string) => {
     setSelectedNfts((prev) => {
@@ -164,6 +249,9 @@ export default function Tokens() {
           : CHECKS_ORIGINALS_SEPOLIA_ADDRESS;
       const contractAbi =
         contractType === "editions" ? EDITIONS_ABI : ORIGINALS_ABI;
+
+      // Check and switch chain if needed
+      await checkAndSwitchChain();
 
       const hash = await walletClient.writeContract({
         address: contractAddress as `0x${string}`,
@@ -287,6 +375,9 @@ export default function Tokens() {
         )
         .map((nft) => BigInt(nft.identifier));
 
+      // Check and switch chain if needed
+      await checkAndSwitchChain();
+
       // Call the contribute function
       const hash = await walletClient.writeContract({
         address: CONTRACT_ADDRESS as `0x${string}`,
@@ -348,6 +439,9 @@ export default function Tokens() {
             : sepolia,
         transport: custom(window.ethereum as any),
       });
+
+      // Check and switch chain if needed
+      await checkAndSwitchChain();
 
       // Get all selected token IDs (the refund function takes a simple array of token IDs)
       const selectedTokenIds = Array.from(selectedNfts).map((identifier) =>
@@ -473,8 +567,28 @@ export default function Tokens() {
     fetchTokens();
     fetchDepositedTokens();
     checkApprovalStatus();
+    // Check current chain on mount
+    checkCurrentChain();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [ready, authenticated, user?.wallet?.address]);
+
+  // Listen for chain changes
+  useEffect(() => {
+    if (!window.ethereum) return;
+
+    const handleChainChanged = () => {
+      checkCurrentChain();
+    };
+
+    (window.ethereum as any).on("chainChanged", handleChainChanged);
+
+    return () => {
+      (window.ethereum as any).removeListener(
+        "chainChanged",
+        handleChainChanged
+      );
+    };
+  }, []);
 
   // Clear selected NFTs when switching tabs
   useEffect(() => {
@@ -559,6 +673,20 @@ export default function Tokens() {
         }}
         primaryDisabled={!approvalStatus.editions || !approvalStatus.originals}
       >
+        {chainSwitching && (
+          <div className="mb-4 p-3 bg-blue-500/20 border border-blue-500/40 rounded-lg">
+            <div className="flex items-center gap-2 text-blue-300">
+              <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-blue-300"></div>
+              <span className="text-sm">
+                Switching to{" "}
+                {process.env.NEXT_PUBLIC_NETWORK === "sepolia"
+                  ? "Sepolia"
+                  : "Mainnet"}{" "}
+                network...
+              </span>
+            </div>
+          </div>
+        )}
         <Button
           onClick={async () => {
             if (approvalStatus.editions) return;
@@ -633,6 +761,20 @@ export default function Tokens() {
         primaryDisabled={depositLoading}
         primaryLoading={depositLoading}
       >
+        {chainSwitching && (
+          <div className="mb-4 p-3 bg-blue-500/20 border border-blue-500/40 rounded-lg">
+            <div className="flex items-center gap-2 text-blue-300">
+              <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-blue-300"></div>
+              <span className="text-sm">
+                Switching to{" "}
+                {process.env.NEXT_PUBLIC_NETWORK === "sepolia"
+                  ? "Sepolia"
+                  : "Mainnet"}{" "}
+                network...
+              </span>
+            </div>
+          </div>
+        )}
         <h3>Selected Checks:</h3>
         <div className="max-h-36 overflow-y-auto space-y-1">
           {Array.from(selectedNfts).map((identifier) => {
@@ -671,6 +813,20 @@ export default function Tokens() {
         primaryDisabled={withdrawLoading}
         primaryLoading={withdrawLoading}
       >
+        {chainSwitching && (
+          <div className="mb-4 p-3 bg-blue-500/20 border border-blue-500/40 rounded-lg">
+            <div className="flex items-center gap-2 text-blue-300">
+              <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-blue-300"></div>
+              <span className="text-sm">
+                Switching to{" "}
+                {process.env.NEXT_PUBLIC_NETWORK === "sepolia"
+                  ? "Sepolia"
+                  : "Mainnet"}{" "}
+                network...
+              </span>
+            </div>
+          </div>
+        )}
         <h3>Selected Checks:</h3>
         <div className="max-h-36 overflow-y-auto space-y-1">
           {Array.from(selectedNfts).map((identifier) => {
@@ -690,11 +846,45 @@ export default function Tokens() {
         </div>
       </Modal>
 
+      {/* Network Warning Banner */}
+      {wrongNetwork && (
+        <div className="fixed top-0 left-0 right-0 z-50 bg-yellow-500/90 border-b border-yellow-400/50 backdrop-blur-sm">
+          <div className="max-w-7xl mx-auto px-4 py-3">
+            <div className="flex items-center justify-between">
+              <div className="flex items-center gap-3">
+                <div className="w-2 h-2 bg-yellow-400 rounded-full animate-pulse"></div>
+                <span className="text-yellow-900 font-medium">
+                  You're connected to the wrong network. Please switch to{" "}
+                  {process.env.NEXT_PUBLIC_NETWORK === "sepolia"
+                    ? "Sepolia"
+                    : "Mainnet"}
+                  .
+                </span>
+              </div>
+              <Button
+                onClick={checkAndSwitchChain}
+                variant="secondary"
+                size="sm"
+                className="bg-yellow-400 text-yellow-900 hover:bg-yellow-300"
+              >
+                Switch Network
+              </Button>
+            </div>
+          </div>
+        </div>
+      )}
+
       {authenticated ? (
         isEmpty ? (
-          <EmptyState />
+          <div className={wrongNetwork ? "pt-16" : ""}>
+            <EmptyState />
+          </div>
         ) : (
-          <div className="flex-1 overflow-y-auto w-full overflow-x-hidden">
+          <div
+            className={`flex-1 overflow-y-auto w-full overflow-x-hidden ${
+              wrongNetwork ? "pt-16" : ""
+            }`}
+          >
             <div className="grid grid-cols-2">
               {currentNfts.map((nft, index) => {
                 const identifier =
@@ -753,13 +943,21 @@ export default function Tokens() {
           </div>
         )
       ) : (
-        <div className="flex-center flex-col w-full h-full p-16">
+        <div
+          className={`flex-center flex-col w-full h-full p-16 ${
+            wrongNetwork ? "pt-32" : ""
+          }`}
+        >
           <img src="/check-token.png" alt="black check" className="w-72" />
         </div>
       )}
       {/* Action button when items are selected */}
       {authenticated && selectedNfts.size > 0 && (
-        <div className="w-full h-14 flex-center bg-neutral-950/75 backdrop-blur-sm border-t border-neutral-800 flex-shrink-0">
+        <div
+          className={`w-full h-14 flex-center bg-neutral-950/75 backdrop-blur-sm border-t border-neutral-800 flex-shrink-0 ${
+            wrongNetwork ? "pt-16" : ""
+          }`}
+        >
           <Button
             onClick={activeTab === "deposit" ? handleDeposit : handleWithdraw}
             variant="primary"
@@ -772,7 +970,11 @@ export default function Tokens() {
         </div>
       )}
 
-      <div className="w-full h-14 flex-center bg-neutral-950/75 backdrop-blur-sm border-t border-neutral-800 flex-shrink-0">
+      <div
+        className={`w-full h-14 flex-center bg-neutral-950/75 backdrop-blur-sm border-t border-neutral-800 flex-shrink-0 ${
+          wrongNetwork ? "pt-16" : ""
+        }`}
+      >
         {!authenticated ? (
           <Button onClick={login} variant="secondary" className="flex-1 h-full">
             Connect wallet to deposit or withdraw checks
