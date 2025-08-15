@@ -54,13 +54,15 @@ export default function Tokens() {
   const [approvalStatus, setApprovalStatus] = useState<{
     editions: boolean;
     originals: boolean;
-  }>({ editions: false, originals: false });
+    blackCheckOne: boolean;
+  }>({ editions: false, originals: false, blackCheckOne: false });
   const [showApprovalPrompt, setShowApprovalPrompt] = useState(false);
   const [showDepositPrompt, setShowDepositPrompt] = useState(false);
   const [showWithdrawPrompt, setShowWithdrawPrompt] = useState(false);
   const [approvalLoading, setApprovalLoading] = useState({
     editions: false,
     originals: false,
+    blackCheckOne: false,
   });
   const [depositLoading, setDepositLoading] = useState(false);
   const [withdrawLoading, setWithdrawLoading] = useState(false);
@@ -212,18 +214,31 @@ export default function Tokens() {
         ],
       });
 
+      // Check approval for Black Check One contract (for refunds)
+      const blackCheckOneApproved = await publicClient.readContract({
+        address: CONTRACT_ADDRESS as `0x${string}`,
+        abi: BLACK_CHECK_ONE_ABI,
+        functionName: "isApprovedForAll",
+        args: [
+          user.wallet.address as `0x${string}`,
+          CONTRACT_ADDRESS as `0x${string}`,
+        ],
+      });
+
       setApprovalStatus({
         editions: editionsApproved as boolean,
         originals: originalsApproved as boolean,
+        blackCheckOne: blackCheckOneApproved as boolean,
       });
 
       return {
         editions: editionsApproved as boolean,
         originals: originalsApproved as boolean,
+        blackCheckOne: blackCheckOneApproved as boolean,
       };
     } catch (err) {
       console.error("Error checking approval status:", err);
-      return { editions: false, originals: false };
+      return { editions: false, originals: false, blackCheckOne: false };
     }
   };
 
@@ -288,6 +303,63 @@ export default function Tokens() {
       throw err;
     } finally {
       setApprovalLoading((prev) => ({ ...prev, [contractType]: false }));
+    }
+  };
+
+  const requestBlackCheckOneApproval = async () => {
+    if (!user?.wallet?.address) return;
+
+    try {
+      setApprovalLoading((prev) => ({ ...prev, blackCheckOne: true }));
+      setError(null);
+
+      if (!window.ethereum) {
+        throw new Error("No Ethereum provider found");
+      }
+
+      const walletClient = createWalletClient({
+        chain: sepolia,
+        transport: custom(window.ethereum as any),
+      });
+
+      // Check and switch chain if needed
+      await checkAndSwitchChain();
+
+      const hash = await walletClient.writeContract({
+        address: CONTRACT_ADDRESS as `0x${string}`,
+        abi: BLACK_CHECK_ONE_ABI,
+        functionName: "setApprovalForAll",
+        args: [CONTRACT_ADDRESS as `0x${string}`, true],
+        account: user.wallet.address as `0x${string}`,
+        chain:
+          process.env.NEXT_PUBLIC_NETWORK === "sepolia" ? sepolia : mainnet,
+      });
+
+      // Wait for transaction to be mined before updating status
+      const publicClient = createPublicClient({
+        chain:
+          process.env.NEXT_PUBLIC_NETWORK === "sepolia" ? sepolia : mainnet,
+        transport: http(window.ethereum as any),
+      });
+
+      await publicClient.waitForTransactionReceipt({ hash });
+
+      // Update approval status
+      setApprovalStatus((prev) => ({
+        ...prev,
+        blackCheckOne: true,
+      }));
+
+      // Refresh approval status to ensure it's up to date
+      await checkApprovalStatus();
+
+      return hash;
+    } catch (err) {
+      console.error("Error requesting Black Check One approval:", err);
+      setError("Failed to approve Black Check One contract. Please try again.");
+      throw err;
+    } finally {
+      setApprovalLoading((prev) => ({ ...prev, blackCheckOne: false }));
     }
   };
 
@@ -416,7 +488,33 @@ export default function Tokens() {
 
   const handleWithdraw = async () => {
     if (!user?.wallet?.address || selectedNfts.size === 0) return;
-    setShowWithdrawPrompt(true);
+
+    try {
+      setLoading(true);
+      setError(null);
+
+      // Check approval status first
+      const approvalStatus = await checkApprovalStatus();
+
+      if (!approvalStatus) {
+        throw new Error("Failed to check approval status");
+      }
+
+      // Check if we need approval for the Black Check One contract
+      if (!approvalStatus.blackCheckOne) {
+        setShowApprovalPrompt(true);
+        setLoading(false);
+        return;
+      }
+
+      // Show withdraw confirmation modal
+      setShowWithdrawPrompt(true);
+      setLoading(false);
+    } catch (err) {
+      console.error("Error in handleWithdraw:", err);
+      setError("Failed to process withdrawal. Please try again.");
+      setLoading(false);
+    }
   };
 
   const performWithdraw = async () => {
@@ -432,11 +530,7 @@ export default function Tokens() {
 
       const walletClient = createWalletClient({
         chain:
-          process.env.NEXT_PUBLIC_NETWORK === "sepolia"
-            ? sepolia
-            : process.env.NEXT_PUBLIC_NETWORK === "mainnet"
-            ? mainnet
-            : sepolia,
+          process.env.NEXT_PUBLIC_NETWORK === "sepolia" ? sepolia : mainnet,
         transport: custom(window.ethereum as any),
       });
 
@@ -456,21 +550,13 @@ export default function Tokens() {
         args: [selectedTokenIds],
         account: user.wallet.address as `0x${string}`,
         chain:
-          process.env.NEXT_PUBLIC_NETWORK === "sepolia"
-            ? sepolia
-            : process.env.NEXT_PUBLIC_NETWORK === "mainnet"
-            ? mainnet
-            : sepolia,
+          process.env.NEXT_PUBLIC_NETWORK === "sepolia" ? sepolia : mainnet,
       });
 
       // Wait for transaction to be mined
       const publicClient = createPublicClient({
         chain:
-          process.env.NEXT_PUBLIC_NETWORK === "sepolia"
-            ? sepolia
-            : process.env.NEXT_PUBLIC_NETWORK === "mainnet"
-            ? mainnet
-            : sepolia,
+          process.env.NEXT_PUBLIC_NETWORK === "sepolia" ? sepolia : mainnet,
         transport: http(window.ethereum as any),
       });
 
@@ -664,14 +750,26 @@ export default function Tokens() {
         isOpen={showApprovalPrompt}
         onClose={() => setShowApprovalPrompt(false)}
         title="Approve NFT Transfers"
-        subtitle="In order to deposit your Checks, you'll need to approve the Black Check One contract to transfer your NFTs."
+        subtitle={
+          activeTab === "deposit"
+            ? "In order to deposit your Checks, you'll need to approve the Black Check One contract to transfer your NFTs."
+            : "In order to withdraw your Checks, you'll need to approve the Black Check One contract to transfer its own tokens."
+        }
         closeText="Cancel"
-        primaryText="Deposit"
+        primaryText={activeTab === "deposit" ? "Deposit" : "Withdraw"}
         onPrimaryAction={async () => {
           setShowApprovalPrompt(false);
-          await performDeposit();
+          if (activeTab === "deposit") {
+            await performDeposit();
+          } else {
+            await performWithdraw();
+          }
         }}
-        primaryDisabled={!approvalStatus.editions || !approvalStatus.originals}
+        primaryDisabled={
+          activeTab === "deposit"
+            ? !approvalStatus.editions || !approvalStatus.originals
+            : !approvalStatus.blackCheckOne
+        }
       >
         {chainSwitching && (
           <div className="mb-4 p-3 bg-blue-500/20 border border-blue-500/40 rounded-lg">
@@ -687,63 +785,107 @@ export default function Tokens() {
             </div>
           </div>
         )}
-        <Button
-          onClick={async () => {
-            if (approvalStatus.editions) return;
-            try {
-              await requestApproval("editions");
-            } catch (err) {
-              console.error("Error approving editions:", err);
-            }
-          }}
-          variant="border"
-          disabled={approvalLoading.editions || approvalStatus.editions}
-          className="flex justify-between group !p-5"
-          size="sm"
-        >
-          Checks Editions
-          <span className="bg-white/10 py-2 px-3 text-neutral-400 group-hover:text-white flex items-center gap-2">
-            {approvalStatus.editions ? (
-              <>
-                Approved
-                <img src="/check-light.svg" alt="approved" className="w-4" />
-              </>
-            ) : approvalLoading.editions ? (
-              "Approving..."
-            ) : (
-              "Approve"
-            )}
-          </span>
-        </Button>
 
-        <Button
-          onClick={async () => {
-            if (approvalStatus.originals) return;
-            try {
-              await requestApproval("originals");
-            } catch (err) {
-              console.error("Error approving originals:", err);
+        {activeTab === "deposit" ? (
+          <>
+            <Button
+              onClick={async () => {
+                if (approvalStatus.editions) return;
+                try {
+                  await requestApproval("editions");
+                } catch (err) {
+                  console.error("Error approving editions:", err);
+                }
+              }}
+              variant="border"
+              disabled={approvalLoading.editions || approvalStatus.editions}
+              className="flex justify-between group !p-5"
+              size="sm"
+            >
+              Checks Editions
+              <span className="bg-white/10 py-2 px-3 text-neutral-400 group-hover:text-white flex items-center gap-2">
+                {approvalStatus.editions ? (
+                  <>
+                    Approved
+                    <img
+                      src="/check-light.svg"
+                      alt="approved"
+                      className="w-4"
+                    />
+                  </>
+                ) : approvalLoading.editions ? (
+                  "Approving..."
+                ) : (
+                  "Approve"
+                )}
+              </span>
+            </Button>
+
+            <Button
+              onClick={async () => {
+                if (approvalStatus.originals) return;
+                try {
+                  await requestApproval("originals");
+                } catch (err) {
+                  console.error("Error approving originals:", err);
+                }
+              }}
+              variant="border"
+              disabled={approvalLoading.originals || approvalStatus.originals}
+              className="flex justify-between group !p-5"
+              size="sm"
+            >
+              Checks Originals
+              <span className="bg-white/10 py-2 px-3 text-neutral-400 group-hover:text-white flex items-center gap-2">
+                {approvalStatus.originals ? (
+                  <>
+                    Approved
+                    <img
+                      src="/check-light.svg"
+                      alt="approved"
+                      className="w-4"
+                    />
+                  </>
+                ) : approvalLoading.originals ? (
+                  "Approving..."
+                ) : (
+                  "Approve"
+                )}
+              </span>
+            </Button>
+          </>
+        ) : (
+          <Button
+            onClick={async () => {
+              if (approvalStatus.blackCheckOne) return;
+              try {
+                await requestBlackCheckOneApproval();
+              } catch (err) {
+                console.error("Error approving Black Check One:", err);
+              }
+            }}
+            variant="border"
+            disabled={
+              approvalLoading.blackCheckOne || approvalStatus.blackCheckOne
             }
-          }}
-          variant="border"
-          disabled={approvalLoading.originals || approvalStatus.originals}
-          className="flex justify-between group !p-5"
-          size="sm"
-        >
-          Checks Originals
-          <span className="bg-white/10 py-2 px-3 text-neutral-400 group-hover:text-white flex items-center gap-2">
-            {approvalStatus.originals ? (
-              <>
-                Approved
-                <img src="/check-light.svg" alt="approved" className="w-4" />
-              </>
-            ) : approvalLoading.originals ? (
-              "Approving..."
-            ) : (
-              "Approve"
-            )}
-          </span>
-        </Button>
+            className="flex justify-between group !p-5"
+            size="sm"
+          >
+            Black Check One Contract
+            <span className="bg-white/10 py-2 px-3 text-neutral-400 group-hover:text-white flex items-center gap-2">
+              {approvalStatus.blackCheckOne ? (
+                <>
+                  Approved
+                  <img src="/check-light.svg" alt="approved" className="w-4" />
+                </>
+              ) : approvalLoading.blackCheckOne ? (
+                "Approving..."
+              ) : (
+                "Approve"
+              )}
+            </span>
+          </Button>
+        )}
       </Modal>
 
       {/* Deposit Confirmation Modal */}
