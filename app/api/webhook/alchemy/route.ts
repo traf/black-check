@@ -5,13 +5,17 @@ import { supabase } from "@/app/lib/supabase";
 interface AlchemyWebhookPayload {
   createdAt: string;
   event: {
-    category: string;
+    network?: string;
+    activity?: any;
+    source?: string;
+    // Legacy fields for older webhook format
+    category?: string;
     erc1155Metadata?: Array<{
       tokenId: string;
       value: string;
     }>;
-    fromAddress: string;
-    toAddress: string;
+    fromAddress?: string;
+    toAddress?: string;
     log?: {
       address: string;
       blockHash: string;
@@ -53,11 +57,14 @@ export async function POST(request: NextRequest) {
     console.log("Received Alchemy webhook:", {
       id: payload.id,
       type: payload.type,
+      format: event?.network ? "new" : "legacy",
       category: event?.category,
       fromAddress: event?.fromAddress,
       toAddress: event?.toAddress,
       transactionHash: log?.transactionHash,
       blockNumber: log?.blockNumber,
+      network: event?.network,
+      source: event?.source,
     });
 
     // Validate the payload with detailed error messages
@@ -69,6 +76,18 @@ export async function POST(request: NextRequest) {
       );
     }
 
+    // Check if this is a new format webhook (with network, activity, source)
+    if (event.network && event.activity && event.source) {
+      console.log("Processing new format webhook with activity data");
+      // Handle new format webhook
+      await handleNewFormatWebhook(payload);
+      return NextResponse.json({
+        success: true,
+        message: "New format webhook processed successfully",
+      });
+    }
+
+    // Check for legacy format with log data
     if (!log) {
       console.error("Missing log property in webhook event", {
         eventKeys: Object.keys(event),
@@ -89,7 +108,7 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    // Handle different event types
+    // Handle different event types (only for legacy format)
     switch (payload.type) {
       case "NFT_ACTIVITY":
         await handleNFTActivity(payload);
@@ -122,6 +141,27 @@ export async function POST(request: NextRequest) {
   }
 }
 
+async function handleNewFormatWebhook(payload: AlchemyWebhookPayload) {
+  try {
+    const { event } = payload;
+
+    console.log("Processing new format webhook:", {
+      network: event.network,
+      source: event.source,
+      activity: event.activity,
+    });
+
+    // Log the activity data for debugging
+    console.log("Activity data:", JSON.stringify(event.activity, null, 2));
+
+    // For now, just log the data until we understand the structure better
+    console.log("New format webhook processed successfully");
+  } catch (error) {
+    console.error("Error handling new format webhook:", error);
+    throw error;
+  }
+}
+
 async function handleNFTActivity(payload: AlchemyWebhookPayload) {
   try {
     const { event } = payload;
@@ -130,6 +170,11 @@ async function handleNFTActivity(payload: AlchemyWebhookPayload) {
     // Ensure log exists before proceeding
     if (!log) {
       throw new Error("Log data is required for NFT activity processing");
+    }
+
+    // Ensure required fields exist
+    if (!event.fromAddress || !event.toAddress) {
+      throw new Error("Missing fromAddress or toAddress in webhook event");
     }
 
     // Extract relevant data with safe access
@@ -221,9 +266,32 @@ async function storeTransferData(transferData: {
 
 async function storeWebhookData(payload: AlchemyWebhookPayload) {
   try {
-    const log = payload.event.log;
+    const { event } = payload;
 
-    // Ensure log exists before proceeding
+    // Handle new format webhook
+    if (event.network && event.activity) {
+      console.log("Storing new format webhook data");
+      // For new format, we'll store basic info without log data
+      const { data, error } = await supabase.from("Transfer").insert({
+        id: `${payload.id}_${Date.now()}`,
+        token_id: 0, // Use 0 for webhook logs
+        from: "webhook",
+        to: "system",
+        block_number: 0, // No block number in new format
+        block_timestamp: Math.floor(
+          new Date(payload.createdAt).getTime() / 1000
+        ),
+        transaction_hash: payload.id, // Use webhook ID as transaction hash
+      });
+
+      if (error) {
+        console.error("Error storing new format webhook log:", error);
+      }
+      return;
+    }
+
+    // Handle legacy format webhook
+    const log = event.log;
     if (!log) {
       console.error("Cannot store webhook data: log is undefined");
       return;
