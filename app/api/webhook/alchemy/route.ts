@@ -10,6 +10,7 @@ interface AlchemyWebhookPayload {
     source?: string;
     // Legacy fields for older webhook format
     category?: string;
+    erc721TokenId?: string;
     erc1155Metadata?: Array<{
       tokenId: string;
       value: string;
@@ -187,22 +188,17 @@ async function handleNFTActivity(payload: AlchemyWebhookPayload) {
     ); // Convert to Unix timestamp
 
     // Handle ERC-1155 transfers
-    if (event.category === "erc1155" && event.erc1155Metadata) {
-      for (const metadata of event.erc1155Metadata) {
-        const tokenId = metadata.tokenId;
-        const value = parseInt(metadata.value, 16);
-
-        // Store transfer data
-        await storeTransferData({
-          from: fromAddress,
-          to: toAddress,
-          tokenId,
-          value,
-          transactionHash,
-          blockNumber,
-          blockTimestamp,
-        });
-      }
+    if (event.category === "erc721" && event.erc721TokenId) {
+      // Store transfer data
+      await storeTransferData({
+        from: fromAddress,
+        to: toAddress,
+        tokenId: event.erc721TokenId,
+        value: 1,
+        transactionHash,
+        blockNumber,
+        blockTimestamp,
+      });
     }
 
     console.log(
