@@ -3,38 +3,42 @@ interface ButtonProps {
   href?: string;
   target?: string;
   onClick?: () => void;
-  variant?: 'primary' | 'secondary' | 'tertiary' | 'border' | 'ghost';
-  size?: 'sm' | 'md';
+  variant?: "primary" | "secondary" | "tertiary" | "border" | "ghost";
+  size?: "sm" | "md";
   className?: string;
   disabled?: boolean;
 }
 
-export default function Button({ 
-  children, 
-  href, 
+export default function Button({
+  children,
+  href,
   target,
-  onClick, 
-  variant = 'primary',
-  size = 'md',
-  className = '',
-  disabled = false
+  onClick,
+  variant = "primary",
+  size = "md",
+  className = "",
+  disabled = false,
 }: ButtonProps) {
-  const baseClasses = "font-mono flex-center cursor-pointer flex-shrink-0 whitespace-nowrap";
-  
+  const baseClasses =
+    "font-mono flex-center cursor-pointer flex-shrink-0 whitespace-nowrap";
+
   const variantClasses = {
-    primary: "bg-white !text-black hover:bg-neutral-200 text-white",
+    primary: "bg-white !text-black hover:bg-neutral-200",
     secondary: "bg-neutral-900 hover:bg-neutral-800 text-white",
     tertiary: "bg-transparent text-neutral-400 hover:text-white",
-    border: "bg-black border border-neutral-800 hover:bg-neutral-900 text-white",
-    ghost: "bg-transparent hover:bg-neutral-900 text-white"
+    border:
+      "bg-black border border-neutral-800 hover:bg-neutral-900 text-white",
+    ghost: "bg-transparent hover:bg-neutral-900 text-white",
   };
 
   const sizeClasses = {
     sm: "!text-sm px-4 py-2",
-    md: "px-6 py-3"
+    md: "px-6 py-3",
   };
 
-  const disabledClasses = disabled ? "opacity-60 cursor-not-allowed pointer-events-none" : "";
+  const disabledClasses = disabled
+    ? "opacity-60 cursor-not-allowed pointer-events-none"
+    : "";
   const classes = `${baseClasses} ${sizeClasses[size]} ${variantClasses[variant]} ${disabledClasses} ${className}`;
 
   if (href && !disabled) {
@@ -50,4 +54,4 @@ export default function Button({
       {children}
     </button>
   );
-} 
+}
