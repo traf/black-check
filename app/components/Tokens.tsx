@@ -658,6 +658,7 @@ export default function Tokens() {
   const currentNfts = activeTab === "deposit" ? nfts : depositedNfts;
   const isEmpty = currentNfts.length === 0;
 
+  console.log("!!!", currentNfts);
   const EmptyState = () => (
     <div className="flex-center flex-col gap-8 h-full">
       <Check variant="x" className="w-12" />

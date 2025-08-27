@@ -155,10 +155,62 @@ async function handleNewFormatWebhook(payload: AlchemyWebhookPayload) {
     // Log the activity data for debugging
     console.log("Activity data:", JSON.stringify(event.activity, null, 2));
 
-    // For now, just log the data until we understand the structure better
+    // Process each activity item in the array
+    if (event.activity && Array.isArray(event.activity)) {
+      for (const activity of event.activity) {
+        await processActivityItem(activity, payload.createdAt);
+      }
+    }
+
     console.log("New format webhook processed successfully");
   } catch (error) {
     console.error("Error handling new format webhook:", error);
+    throw error;
+  }
+}
+
+async function processActivityItem(activity: any, createdAt: string) {
+  try {
+    // Extract data from the activity
+    const fromAddress = activity.fromAddress;
+    const toAddress = activity.toAddress;
+    const contractAddress = activity.contractAddress;
+    const blockNum = activity.blockNum;
+    const hash = activity.hash;
+    const erc721TokenId = activity.erc721TokenId;
+    const category = activity.category;
+
+    // Validate required fields
+    if (!fromAddress || !toAddress || !hash || !erc721TokenId) {
+      console.warn("Missing required fields in activity:", {
+        fromAddress,
+        toAddress,
+        hash,
+        erc721TokenId,
+      });
+      return;
+    }
+
+    // Convert hex values to appropriate formats
+    const blockNumber = parseInt(blockNum, 16);
+    const tokenId = parseInt(erc721TokenId, 16);
+    const blockTimestamp = Math.floor(new Date(createdAt).getTime() / 1000);
+
+    // Store the transfer data
+    await storeTransferData({
+      from: fromAddress.toLowerCase(),
+      to: toAddress.toLowerCase(),
+      tokenId: tokenId.toString(),
+      value: 1, // ERC721 transfers always have value of 1
+      transactionHash: hash,
+      blockNumber,
+      blockTimestamp,
+      contractAddress: contractAddress?.toLowerCase(),
+    });
+
+    console.log(`Processed activity: ${fromAddress} -> ${toAddress} (${hash})`);
+  } catch (error) {
+    console.error("Error processing activity item:", error);
     throw error;
   }
 }
@@ -218,6 +270,7 @@ async function storeTransferData(transferData: {
   transactionHash: string;
   blockNumber: number;
   blockTimestamp: number;
+  contractAddress?: string;
 }) {
   try {
     console.log("Attempting to store transfer data:", {
@@ -228,6 +281,7 @@ async function storeTransferData(transferData: {
       transactionHash: transferData.transactionHash,
       blockNumber: transferData.blockNumber,
       blockTimestamp: transferData.blockTimestamp,
+      contractAddress: transferData.contractAddress,
     });
 
     const { data, error } = await supabase.from("Transfer").insert({
@@ -235,6 +289,7 @@ async function storeTransferData(transferData: {
       token_id: parseInt(transferData.tokenId) || 0,
       from: transferData.from,
       to: transferData.to,
+      token_address: transferData.contractAddress || null,
       block_number: transferData.blockNumber,
       block_timestamp: transferData.blockTimestamp,
       transaction_hash: transferData.transactionHash,
