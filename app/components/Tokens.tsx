@@ -49,6 +49,7 @@ export default function Tokens() {
   const [nfts, setNfts] = useState<NFT[]>([]);
   const [depositedNfts, setDepositedNfts] = useState<DepositedNFT[]>([]);
   const [loading, setLoading] = useState(false);
+  const [loadingDepositedNfts, setLoadingDepositedNfts] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [selectedNfts, setSelectedNfts] = useState<Set<string>>(new Set());
   const [activeTab, setActiveTab] = useState<"deposit" | "withdraw">("deposit");
@@ -565,6 +566,9 @@ export default function Tokens() {
   const fetchDepositedTokens = useCallback(async () => {
     if (!user?.wallet?.address) return;
 
+    setLoadingDepositedNfts(true);
+    setError(null);
+
     try {
       // Fetch deposited NFTs from our API route
       const response = await fetch(
@@ -581,6 +585,8 @@ export default function Tokens() {
     } catch (err) {
       console.error("Error fetching deposited NFTs:", err);
       setDepositedNfts([]);
+    } finally {
+      setLoadingDepositedNfts(false);
     }
   }, [user?.wallet?.address]);
 
@@ -643,7 +649,7 @@ export default function Tokens() {
     );
   }
 
-  if (loading) {
+  if (loading || loadingDepositedNfts) {
     return <div className="flex-center text-white">Loading Checks...</div>;
   }
 
