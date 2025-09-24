@@ -158,7 +158,29 @@ async function handleNewFormatWebhook(payload: AlchemyWebhookPayload) {
     // Process each activity item in the array
     if (event.activity && Array.isArray(event.activity)) {
       for (const activity of event.activity) {
-        await processActivityItem(activity, payload.createdAt);
+        try {
+          await processActivityItem(activity, payload.createdAt);
+        } catch (activityError) {
+          // Check if it's a duplicate key error - these are expected and should not fail the entire webhook
+          if (
+            activityError &&
+            typeof activityError === "object" &&
+            "code" in activityError &&
+            activityError.code === "23505"
+          ) {
+            console.log(
+              `Activity already processed (duplicate): ${activity.hash}_${activity.erc721TokenId}`
+            );
+            continue; // Continue processing other activities
+          }
+
+          // For other errors, log and continue processing other activities
+          console.error(
+            "Error processing individual activity item:",
+            activityError
+          );
+          continue;
+        }
       }
     }
 
@@ -210,6 +232,19 @@ async function processActivityItem(activity: any, createdAt: string) {
 
     console.log(`Processed activity: ${fromAddress} -> ${toAddress} (${hash})`);
   } catch (error) {
+    // Check if it's a duplicate key error - these are expected and should not be treated as failures
+    if (
+      error &&
+      typeof error === "object" &&
+      "code" in error &&
+      error.code === "23505"
+    ) {
+      console.log(
+        `Activity item already processed (duplicate): ${activity.hash}_${activity.erc721TokenId}`
+      );
+      return;
+    }
+
     console.error("Error processing activity item:", error);
     throw error;
   }
@@ -284,8 +319,29 @@ async function storeTransferData(transferData: {
       contractAddress: transferData.contractAddress,
     });
 
+    const transferId = `${transferData.transactionHash}_${transferData.tokenId}`;
+
+    // First check if the transfer already exists
+    const { data: existingTransfer, error: checkError } = await supabase
+      .from("Transfer")
+      .select("id")
+      .eq("id", transferId)
+      .single();
+
+    if (checkError && checkError.code !== "PGRST116") {
+      // PGRST116 is "not found" error, which is expected for new transfers
+      console.error("Error checking for existing transfer:", checkError);
+      throw checkError;
+    }
+
+    if (existingTransfer) {
+      console.log(`Transfer already exists: ${transferId}, skipping duplicate`);
+      return;
+    }
+
+    // Insert the new transfer
     const { data, error } = await supabase.from("Transfer").insert({
-      id: `${transferData.transactionHash}_${transferData.tokenId}`,
+      id: transferId,
       token_id: parseInt(transferData.tokenId) || 0,
       from: transferData.from,
       to: transferData.to,
@@ -296,6 +352,13 @@ async function storeTransferData(transferData: {
     });
 
     if (error) {
+      // Check if it's a duplicate key error (race condition)
+      if (error.code === "23505") {
+        console.log(
+          `Transfer already exists (race condition): ${transferId}, skipping duplicate`
+        );
+        return;
+      }
       console.error("Error storing transfer data:", error);
       throw error;
     }
