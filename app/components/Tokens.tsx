@@ -495,7 +495,11 @@ export default function Tokens() {
         transport: http(window.ethereum as any),
       });
 
+      console.log("!!!Waiting for receipt");
+
       await publicClientForReceipt.waitForTransactionReceipt({ hash });
+
+      console.log("!!!Withdrawal successful");
 
       // Clear selected NFTs after successful withdrawal
       setSelectedNfts(new Set());
@@ -948,6 +952,15 @@ export default function Tokens() {
                           // Hide broken images
                           e.currentTarget.style.display = "none";
                         }}
+                      />
+                    )}
+                    {!displayImage && (
+                      <img
+                        src="/check-token.png"
+                        alt={`Checks #${identifier}`}
+                        className={`w-full h-full object-cover relative -my-4 group-hover:opacity-60 ${
+                          isSelected && "blur-[2px] opacity-60"
+                        }`}
                       />
                     )}
                     <p className="absolute bottom-6 w-full text-center">
