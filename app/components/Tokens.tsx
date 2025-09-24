@@ -911,7 +911,7 @@ export default function Tokens() {
               wrongNetwork ? "pt-16" : ""
             }`}
           >
-            <div className="grid grid-cols-2">
+            <div className="grid grid-cols-2" key={activeTab}>
               {currentNfts.map((nft, index) => {
                 const identifier =
                   activeTab === "deposit"
