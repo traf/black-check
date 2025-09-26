@@ -45,7 +45,7 @@ export default function Feed() {
   }
 
   return (
-    <div className="w-full h-full overflow-y-auto space-y-4 divide-y divide-dashed divide-neutral-800">
+    <div className="w-full h-full overflow-y-auto space-y-4 divide-y divide-dashed divide-neutral-800 relative z-50">
       {feedData.map((item) => (
         <div key={item.id} className="w-full h-full flex flex-col gap-4 pb-5">
           <div className="flex items-center justify-between w-full">
