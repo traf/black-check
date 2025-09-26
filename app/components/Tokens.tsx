@@ -68,6 +68,8 @@ export default function Tokens() {
   const [withdrawLoading, setWithdrawLoading] = useState(false);
   const [chainSwitching, setChainSwitching] = useState(false);
   const [wrongNetwork, setWrongNetwork] = useState(false);
+  const [showCelebration, setShowCelebration] = useState(false);
+  const [depositedCount, setDepositedCount] = useState(0);
 
   // Chain switching utilities
   const getTargetChain = () => {
@@ -409,14 +411,19 @@ export default function Tokens() {
       await publicClient.waitForTransactionReceipt({ hash });
 
       console.log("!!!Receipt mined", hash);
+
+      // Store the count of deposited NFTs for celebration
+      setDepositedCount(selectedNfts.size);
+
       // Clear selected NFTs after successful deposit
       setSelectedNfts(new Set());
 
       // Refresh the NFT lists
       await Promise.all([fetchTokens(), fetchDepositedTokens()]);
 
-      // Close the deposit modal
+      // Close the deposit modal and show celebration
       setShowDepositPrompt(false);
+      setShowCelebration(true);
     } catch (err) {
       console.error("Error depositing NFTs:", err);
       setError("Failed to deposit NFTs. Please try again.");
@@ -838,6 +845,38 @@ export default function Tokens() {
               </div>
             );
           })}
+        </div>
+      </Modal>
+
+      {/* Celebration Modal */}
+      <Modal
+        isOpen={showCelebration}
+        onClose={() => setShowCelebration(false)}
+        title="🎉 Deposit Successful!"
+        subtitle={`You've successfully deposited ${depositedCount} Check${
+          depositedCount !== 1 ? "s" : ""
+        } to the Black Check contract. You can withdraw them anytime until the Black Check is created.`}
+        closeText="Awesome!"
+      >
+        <div className="flex flex-col items-center gap-6 py-4">
+          <div className="relative">
+            <img
+              src="/check-token.png"
+              alt="black check"
+              className="w-24 h-24 animate-bounce"
+            />
+            <div className="absolute -top-2 -right-2 w-6 h-6 bg-green-500 rounded-full flex items-center justify-center">
+              <img src="/check-light.svg" alt="success" className="w-4 h-4" />
+            </div>
+          </div>
+          <div className="text-center">
+            <p className="text-green-400 font-semibold text-lg">
+              {depositedCount} Check{depositedCount !== 1 ? "s" : ""} deposited!
+            </p>
+            <p className="text-neutral-400 text-sm mt-2">
+              Your Checks are now part of the Black Check creation process
+            </p>
+          </div>
         </div>
       </Modal>
 
