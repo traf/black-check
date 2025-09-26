@@ -1,5 +1,11 @@
 import { NextRequest, NextResponse } from "next/server";
 import { supabase } from "@/app/lib/supabase";
+import {
+  CHECKS_EDITIONS_SEPOLIA_ADDRESS,
+  CHECKS_ORIGINALS_SEPOLIA_ADDRESS,
+  CHECKS_EDITIONS_MAINNET_ADDRESS,
+  CHECKS_ORIGINALS_MAINNET_ADDRESS,
+} from "@/app/lib/constants";
 
 // Interface for Alchemy webhook payload
 interface AlchemyWebhookPayload {
@@ -159,7 +165,7 @@ async function handleNewFormatWebhook(payload: AlchemyWebhookPayload) {
     if (event.activity && Array.isArray(event.activity)) {
       for (const activity of event.activity) {
         try {
-          await processActivityItem(activity, payload.createdAt);
+          await processActivityItem(activity, payload.createdAt, event.network);
         } catch (activityError) {
           // Check if it's a duplicate key error - these are expected and should not fail the entire webhook
           if (
@@ -191,7 +197,11 @@ async function handleNewFormatWebhook(payload: AlchemyWebhookPayload) {
   }
 }
 
-async function processActivityItem(activity: any, createdAt: string) {
+async function processActivityItem(
+  activity: any,
+  createdAt: string,
+  network?: string
+) {
   try {
     // Extract data from the activity
     const fromAddress = activity.fromAddress;
@@ -218,7 +228,7 @@ async function processActivityItem(activity: any, createdAt: string) {
     const tokenId = parseInt(erc721TokenId, 16);
     const blockTimestamp = Math.floor(new Date(createdAt).getTime() / 1000);
 
-    // Store the transfer data
+    // Store the original transfer data
     await storeTransferData({
       from: fromAddress.toLowerCase(),
       to: toAddress.toLowerCase(),
@@ -231,6 +241,74 @@ async function processActivityItem(activity: any, createdAt: string) {
     });
 
     console.log(`Processed activity: ${fromAddress} -> ${toAddress} (${hash})`);
+
+    // Investigate the transaction for additional transfer events
+    if (network) {
+      console.log(
+        `Investigating transaction ${hash} for additional transfer events...`
+      );
+
+      try {
+        const additionalTransfers = await fetchTransactionTransferEvents(
+          hash,
+          network
+        );
+
+        if (additionalTransfers.length > 0) {
+          console.log(
+            `Found ${additionalTransfers.length} additional transfer events in transaction ${hash}`
+          );
+
+          // Process each additional transfer
+          for (const transfer of additionalTransfers) {
+            // Skip if this is the same transfer we already processed
+            if (
+              transfer.contractAddress === contractAddress?.toLowerCase() &&
+              transfer.tokenId === tokenId.toString() &&
+              transfer.fromAddress === fromAddress.toLowerCase() &&
+              transfer.toAddress === toAddress.toLowerCase()
+            ) {
+              console.log(
+                `Skipping duplicate transfer: ${transfer.contractAddress} #${transfer.tokenId}`
+              );
+              continue;
+            }
+
+            // Only process transfers from our tracked collections
+            if (isTrackedCollection(transfer.contractAddress, network)) {
+              console.log(
+                `Processing additional transfer: ${transfer.contractAddress} #${transfer.tokenId} (${transfer.fromAddress} -> ${transfer.toAddress})`
+              );
+
+              await storeTransferData({
+                from: transfer.fromAddress,
+                to: transfer.toAddress,
+                tokenId: transfer.tokenId,
+                value: transfer.value,
+                transactionHash: transfer.transactionHash,
+                blockNumber: transfer.blockNumber,
+                blockTimestamp: transfer.blockTimestamp,
+                contractAddress: transfer.contractAddress,
+              });
+            } else {
+              console.log(
+                `Skipping transfer from untracked collection: ${transfer.contractAddress}`
+              );
+            }
+          }
+        } else {
+          console.log(
+            `No additional transfer events found in transaction ${hash}`
+          );
+        }
+      } catch (investigationError) {
+        console.error(
+          `Error investigating transaction ${hash}:`,
+          investigationError
+        );
+        // Don't fail the entire webhook if investigation fails
+      }
+    }
   } catch (error) {
     // Check if it's a duplicate key error - these are expected and should not be treated as failures
     if (
@@ -430,6 +508,148 @@ async function storeWebhookData(payload: AlchemyWebhookPayload) {
     console.error("Error storing webhook log:", error);
     // Don't throw here as this is not critical for the main webhook processing
   }
+}
+
+// Function to fetch all transfer events from a transaction using Alchemy RPC
+async function fetchTransactionTransferEvents(
+  transactionHash: string,
+  network: string
+) {
+  try {
+    const alchemyApiKey = process.env.ALCHEMY_API_KEY;
+    if (!alchemyApiKey) {
+      throw new Error("Alchemy API key not configured");
+    }
+
+    // Determine the RPC URL based on network
+    const rpcUrl =
+      network === "ETH_SEPOLIA"
+        ? `https://eth-sepolia.g.alchemy.com/v2/${alchemyApiKey}`
+        : `https://eth-mainnet.g.alchemy.com/v2/${alchemyApiKey}`;
+
+    // Get the transaction receipt to find all logs
+    const receiptResponse = await fetch(rpcUrl, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({
+        jsonrpc: "2.0",
+        method: "eth_getTransactionReceipt",
+        params: [transactionHash],
+        id: 1,
+      }),
+    });
+
+    if (!receiptResponse.ok) {
+      throw new Error(
+        `Failed to fetch transaction receipt: ${receiptResponse.statusText}`
+      );
+    }
+
+    const receiptData = await receiptResponse.json();
+    if (receiptData.error) {
+      throw new Error(`RPC error: ${receiptData.error.message}`);
+    }
+
+    const receipt = receiptData.result;
+    if (!receipt || !receipt.logs) {
+      console.log(`No logs found in transaction ${transactionHash}`);
+      return [];
+    }
+
+    // Filter for Transfer events (ERC-721 and ERC-1155)
+    const transferEvents = receipt.logs.filter((log: any) => {
+      // ERC-721 Transfer event signature: 0xddf252ad1be2c89b69c2b068fc378daa952ba7f163c4a11628f55a4df523b3ef
+      // ERC-1155 TransferSingle event signature: 0xc3d58168c5ae7397731d063d5bbf3d657854427343f4c083240f7aacaa2d0f62
+      // ERC-1155 TransferBatch event signature: 0x4a39dc06d4c0dbc64b70af90fd698a233a518aa5d07e595d983b8c0526c8f7fb
+      const transferSignatures = [
+        "0xddf252ad1be2c89b69c2b068fc378daa952ba7f163c4a11628f55a4df523b3ef", // ERC-721 Transfer
+        "0xc3d58168c5ae7397731d063d5bbf3d657854427343f4c083240f7aacaa2d0f62", // ERC-1155 TransferSingle
+        "0x4a39dc06d4c0dbc64b70af90fd698a233a518aa5d07e595d983b8c0526c8f7fb", // ERC-1155 TransferBatch
+      ];
+
+      return transferSignatures.includes(log.topics[0]);
+    });
+
+    console.log(
+      `Found ${transferEvents.length} transfer events in transaction ${transactionHash}`
+    );
+
+    // Parse transfer events
+    const parsedTransfers = transferEvents.map((log: any) => {
+      const isERC721 =
+        log.topics[0] ===
+        "0xddf252ad1be2c89b69c2b068fc378daa952ba7f163c4a11628f55a4df523b3ef";
+
+      if (isERC721) {
+        // ERC-721 Transfer event
+        const fromAddress = "0x" + log.topics[1].slice(26); // Remove padding
+        const toAddress = "0x" + log.topics[2].slice(26); // Remove padding
+        const tokenId = BigInt(log.topics[3]).toString();
+
+        return {
+          contractAddress: log.address.toLowerCase(),
+          fromAddress: fromAddress.toLowerCase(),
+          toAddress: toAddress.toLowerCase(),
+          tokenId,
+          value: 1,
+          logIndex: parseInt(log.logIndex, 16),
+          blockNumber: parseInt(receipt.blockNumber, 16),
+          blockTimestamp: Math.floor(Date.now() / 1000), // We'll get this from the receipt if available
+          transactionHash: log.transactionHash,
+          type: "ERC721",
+        };
+      } else {
+        // ERC-1155 Transfer events
+        const operator = "0x" + log.topics[1].slice(26);
+        const fromAddress = "0x" + log.topics[2].slice(26);
+        const toAddress = "0x" + log.topics[3].slice(26);
+
+        // For ERC-1155, we need to decode the data field to get tokenId and value
+        // This is a simplified version - in practice you might need more sophisticated decoding
+        const data = log.data;
+        const tokenId = BigInt("0x" + data.slice(2, 66)).toString(); // First 32 bytes
+        const value = BigInt("0x" + data.slice(66, 130)).toString(); // Second 32 bytes
+
+        return {
+          contractAddress: log.address.toLowerCase(),
+          fromAddress: fromAddress.toLowerCase(),
+          toAddress: toAddress.toLowerCase(),
+          tokenId,
+          value: parseInt(value),
+          logIndex: parseInt(log.logIndex, 16),
+          blockNumber: parseInt(receipt.blockNumber, 16),
+          blockTimestamp: Math.floor(Date.now() / 1000),
+          transactionHash: log.transactionHash,
+          type: "ERC1155",
+        };
+      }
+    });
+
+    return parsedTransfers;
+  } catch (error) {
+    console.error(
+      `Error fetching transfer events for transaction ${transactionHash}:`,
+      error
+    );
+    return [];
+  }
+}
+
+// Function to check if a contract address is one of our tracked collections
+function isTrackedCollection(
+  contractAddress: string,
+  network: string
+): boolean {
+  const trackedCollections =
+    network === "ETH_SEPOLIA"
+      ? [CHECKS_EDITIONS_SEPOLIA_ADDRESS, CHECKS_ORIGINALS_SEPOLIA_ADDRESS]
+      : [CHECKS_EDITIONS_MAINNET_ADDRESS, CHECKS_ORIGINALS_MAINNET_ADDRESS];
+
+  return trackedCollections.some(
+    (addr) => addr.toLowerCase() === contractAddress.toLowerCase()
+  );
 }
 
 // Handle GET requests (for webhook verification)
