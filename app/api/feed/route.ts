@@ -6,7 +6,7 @@ export interface FeedItem {
   id: string;
   userAddress: string;
   userName?: string;
-  action: "deposited" | "withdrew" | "minted";
+  action: "deposited" | "withdrew";
   checkCount: number;
   timestamp: string;
   timeAgo: string;
@@ -38,13 +38,13 @@ export async function GET() {
   const routeStartMs = Date.now();
   try {
     console.log("[FEED] Route start");
-    // Fetch transfers to and from the BLACK_CHECK_ONE_SEPOLIA_ADDRESS, and from 0x0 (mints)
+    // Fetch transfers to and from the BLACK_CHECK_ONE_SEPOLIA_ADDRESS
     const supabaseStartMs = Date.now();
     const { data, error } = await supabase
       .from("Transfer")
       .select("*")
       .or(
-        `to.eq.${BLACK_CHECK_ONE_SEPOLIA_ADDRESS.toLowerCase()},from.eq.${BLACK_CHECK_ONE_SEPOLIA_ADDRESS.toLowerCase()},from.eq.0x0000000000000000000000000000000000000000`
+        `to.eq.${BLACK_CHECK_ONE_SEPOLIA_ADDRESS.toLowerCase()},from.eq.${BLACK_CHECK_ONE_SEPOLIA_ADDRESS.toLowerCase()}`
       )
       .order("block_number", { ascending: false })
       .limit(50);
@@ -72,17 +72,11 @@ export async function GET() {
       const isDeposit =
         item.to?.toLowerCase() ===
         BLACK_CHECK_ONE_SEPOLIA_ADDRESS.toLowerCase();
-      const isMint =
-        item.from?.toLowerCase() ===
-        "0x0000000000000000000000000000000000000000";
 
-      let action: "deposited" | "withdrew" | "minted";
+      let action: "deposited" | "withdrew";
       let userAddress: string;
 
-      if (isMint) {
-        action = "minted";
-        userAddress = item.to!; // The recipient of the mint
-      } else if (isDeposit) {
+      if (isDeposit) {
         action = "deposited";
         userAddress = item.from!; // The depositor
       } else {
