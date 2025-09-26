@@ -38,6 +38,7 @@ export async function GET(
     // We want transfers where:
     // - to = BLACK_CHECK_ONE_SEPOLIA_ADDRESS (deposited to contract)
     // - from = user's address (deposited by user)
+    // Order by block number descending to get most recent first
     console.log(
       `[${Date.now() - startTime}ms] Starting initial transfers query`
     );
@@ -45,7 +46,8 @@ export async function GET(
       .from("Transfer")
       .select("*")
       .eq("to", BLACK_CHECK_ONE_SEPOLIA_ADDRESS.toLowerCase())
-      .eq("from", address.toLowerCase());
+      .eq("from", address.toLowerCase())
+      .order("block_number", { ascending: false });
     console.log(
       `[${Date.now() - startTime}ms] Initial transfers query completed. Found ${
         transfers?.length || 0
@@ -60,18 +62,36 @@ export async function GET(
       );
     }
 
+    // Filter to only include the most recent deposit for each token
+    // Since we ordered by block_number desc, we can use a Set to track seen token IDs
+    const seenTokenIds = new Set<number>();
+    const uniqueTransfers =
+      transfers?.filter((transfer) => {
+        if (transfer.token_id && !seenTokenIds.has(transfer.token_id)) {
+          seenTokenIds.add(transfer.token_id);
+          return true;
+        }
+        return false;
+      }) || [];
+
+    console.log(
+      `[${Date.now() - startTime}ms] Filtered to ${
+        uniqueTransfers.length
+      } unique token deposits (from ${transfers?.length || 0} total transfers)`
+    );
+
     // Transform the transfer data into deposited NFTs format and fetch metadata
     const depositedNFTs: DepositedNFT[] = [];
 
-    if (transfers) {
+    if (uniqueTransfers.length > 0) {
       console.log(
         `[${Date.now() - startTime}ms] Starting processing of ${
-          transfers.length
-        } transfers`
+          uniqueTransfers.length
+        } unique transfers`
       );
 
       // Batch query for all received NFTs at once
-      const transactionHashes = transfers
+      const transactionHashes = uniqueTransfers
         .map((t) => t.transaction_hash)
         .filter(Boolean);
       console.log(
@@ -110,7 +130,7 @@ export async function GET(
 
       // Get unique token IDs to avoid duplicate metadata fetches
       const uniqueTokenIds = [
-        ...new Set(transfers.map((t) => t.token_id).filter(Boolean)),
+        ...new Set(uniqueTransfers.map((t) => t.token_id).filter(Boolean)),
       ];
       console.log(
         `[${Date.now() - startTime}ms] Fetching metadata for ${
@@ -163,11 +183,11 @@ export async function GET(
       }
 
       // Process transfers with pre-fetched data
-      for (let i = 0; i < transfers.length; i++) {
-        const transfer = transfers[i];
+      for (let i = 0; i < uniqueTransfers.length; i++) {
+        const transfer = uniqueTransfers[i];
         console.log(
           `[${Date.now() - startTime}ms] Processing transfer ${i + 1}/${
-            transfers.length
+            uniqueTransfers.length
           } (token_id: ${transfer.token_id})`
         );
 
@@ -204,7 +224,7 @@ export async function GET(
         console.log(
           `[${Date.now() - startTime}ms] Completed processing transfer ${
             i + 1
-          }/${transfers.length}`
+          }/${uniqueTransfers.length}`
         );
       }
     }
