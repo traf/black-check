@@ -69,7 +69,7 @@ export default function Feed() {
               <img src="/arrow.svg" alt="tx" />
             </a>
           </div>
-          <div className="flex flex-row gap-3">
+          {/* <div className="flex flex-row gap-3">
             {item.checkImages.map((image, index) => (
               <div
                 key={index}
@@ -82,7 +82,7 @@ export default function Feed() {
                 />
               </div>
             ))}
-          </div>
+          </div> */}
         </div>
       ))}
     </div>

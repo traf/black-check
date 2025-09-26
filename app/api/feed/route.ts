@@ -13,7 +13,6 @@ export interface FeedItem {
   transactionHash: string;
   tokenAddress: string;
   tokenId: number;
-  checkImages: string[];
 }
 
 function getTimeAgo(timestamp: string): string {
@@ -32,72 +31,6 @@ function getTimeAgo(timestamp: string): string {
   } else {
     const days = Math.floor(diffInSeconds / 86400);
     return `${days}d ago`;
-  }
-}
-
-async function getCheckImagesBatch(
-  tokenIds: number[]
-): Promise<Record<string, string | null>> {
-  if (tokenIds.length === 0) {
-    return {};
-  }
-
-  const uniqueTokenIds = [...new Set(tokenIds)].filter((id) => id > 0);
-  if (uniqueTokenIds.length === 0) {
-    return {};
-  }
-
-  const batchStartMs = Date.now();
-  console.log(
-    `[FEED] Fetching ${uniqueTokenIds.length} check images via batch API`
-  );
-
-  try {
-    const response = await fetch(
-      `${
-        process.env.NEXT_PUBLIC_APP_URL || "http://localhost:3000"
-      }/api/check/batch`,
-      {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify({ tokenIds: uniqueTokenIds }),
-      }
-    );
-
-    if (!response.ok) {
-      console.error(`[FEED] Batch API failed with status ${response.status}`);
-      return {};
-    }
-
-    const batchResults = await response.json();
-    const batchDurationMs = Date.now() - batchStartMs;
-    console.log(
-      `[FEED] Batch API completed in ${batchDurationMs}ms, got ${
-        Object.keys(batchResults).length
-      } results`
-    );
-
-    // Transform results to map tokenId -> image_url
-    const imageMap: Record<string, string | null> = {};
-    for (const [tokenId, checkData] of Object.entries(batchResults)) {
-      if (
-        checkData &&
-        typeof checkData === "object" &&
-        "image_url" in checkData
-      ) {
-        const check = checkData as { image_url?: string };
-        imageMap[tokenId] = check.image_url || null;
-      } else {
-        imageMap[tokenId] = null;
-      }
-    }
-
-    return imageMap;
-  } catch (error) {
-    console.error("[FEED] Error fetching check images via batch API:", error);
-    return {};
   }
 }
 
@@ -134,14 +67,6 @@ export async function GET() {
     const transformStartMs = Date.now();
     const items = data || [];
 
-    // Collect all unique token IDs for batch fetching
-    const tokenIds = items
-      .map((item) => item.token_id)
-      .filter((id): id is number => id != null && id > 0);
-
-    // Fetch all check images in a single batch request
-    const imageMap = await getCheckImagesBatch(tokenIds);
-
     // Transform items to feed data
     const feedData: FeedItem[] = items.map((item) => {
       const isDeposit =
@@ -165,11 +90,6 @@ export async function GET() {
         userAddress = item.to!; // The withdrawer
       }
 
-      // Get check image from batch results
-      const checkImage = item.token_id
-        ? imageMap[item.token_id.toString()] || null
-        : null;
-
       return {
         id: item.id,
         userAddress,
@@ -181,16 +101,11 @@ export async function GET() {
         timeAgo: getTimeAgo(item.block_timestamp?.toString() || ""),
         transactionHash: item.transaction_hash || "",
         tokenAddress: item.token_address || "",
-        checkImages: checkImage ? [checkImage] : [],
       } as FeedItem;
     });
 
     const transformDurationMs = Date.now() - transformStartMs;
-    console.log(
-      `[FEED] Transform completed in ${transformDurationMs}ms (batch fetched ${
-        Object.keys(imageMap).length
-      } images)`
-    );
+    console.log(`[FEED] Transform completed in ${transformDurationMs}ms`);
 
     return NextResponse.json({
       success: true,
