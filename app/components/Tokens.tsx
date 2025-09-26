@@ -1121,7 +1121,7 @@ export default function Tokens() {
 
       {authenticated ? (
         isEmpty ? (
-          <div className={wrongNetwork ? "pt-16" : ""}>
+          <div className={`flex-1 w-full ${wrongNetwork ? "pt-16" : ""}`}>
             <EmptyState />
           </div>
         ) : (
