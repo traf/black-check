@@ -6,7 +6,7 @@ export interface FeedItem {
   id: string;
   userAddress: string;
   userName?: string;
-  action: "deposited" | "withdrew";
+  action: "deposited" | "withdrew" | "minted";
   checkCount: number;
   timestamp: string;
   timeAgo: string;
@@ -36,27 +36,43 @@ function getTimeAgo(timestamp: string): string {
 }
 
 // Simple in-memory cache to avoid refetching the same tokenId frequently
-// Successes cached for 10 minutes; misses (null/404) cached for 5 minutes
+// Successes cached for 10 minutes; misses (null/404) cached for 30 seconds
 const imageCache = new Map<
   number,
   { value: string | null; expiresAt: number }
 >();
 
+// Circuit breaker to avoid overwhelming the system with 404s
+let consecutive404s = 0;
+let last404Time = 0;
+const CIRCUIT_BREAKER_THRESHOLD = 5;
+const CIRCUIT_BREAKER_COOLDOWN = 30000; // 30 seconds
+
 async function getCheckImage(tokenId: number): Promise<string | null> {
   const now = Date.now();
+
+  // Check circuit breaker
+  if (
+    consecutive404s >= CIRCUIT_BREAKER_THRESHOLD &&
+    now - last404Time < CIRCUIT_BREAKER_COOLDOWN
+  ) {
+    console.log(`[FEED] Circuit breaker active, skipping tokenId=${tokenId}`);
+    return null;
+  }
+
   const cached = imageCache.get(tokenId);
   if (cached && cached.expiresAt > now) {
     return cached.value;
   }
 
   const controller = new AbortController();
-  const timeoutMs = 2000; // fail fast to keep feed responsive
+  const timeoutMs = 1000; // Reduced timeout for faster failure
   const timeout = setTimeout(() => controller.abort(), timeoutMs);
   const url = `${
     process.env.NEXT_PUBLIC_APP_URL || "http://localhost:3000"
   }/api/check/${tokenId}`;
+
   try {
-    // Use absolute URL since this is a server-side API route
     const response = await fetch(url, {
       headers: {
         Accept: "application/json",
@@ -70,39 +86,63 @@ async function getCheckImage(tokenId: number): Promise<string | null> {
       const value: string | null = checkData.image_url || null;
       imageCache.set(tokenId, {
         value,
-        expiresAt: Date.now() + 10 * 60 * 1000,
+        expiresAt: Date.now() + 10 * 60 * 1000, // 10 minutes for successful responses
       });
+      // Reset circuit breaker on success
+      consecutive404s = 0;
       return value;
-    } else {
-      console.warn(`Failed to fetch check ${tokenId}: ${response.status}`);
-      // Cache negative result to avoid repeated 404s for a while
+    } else if (response.status === 404) {
+      console.warn(`[FEED] Check ${tokenId} not found (404)`);
+      // Cache 404 for only 30 seconds to avoid repeated requests
       imageCache.set(tokenId, {
         value: null,
-        expiresAt: Date.now() + 5 * 60 * 1000,
+        expiresAt: Date.now() + 30 * 1000, // 30 seconds for 404s
       });
+      // Update circuit breaker
+      consecutive404s++;
+      last404Time = now;
+      return null;
+    } else {
+      console.warn(
+        `[FEED] Failed to fetch check ${tokenId}: ${response.status}`
+      );
+      // Cache other errors for 2 minutes
+      imageCache.set(tokenId, {
+        value: null,
+        expiresAt: Date.now() + 2 * 60 * 1000,
+      });
+      return null;
     }
   } catch (error) {
-    console.error(`Error fetching check image for token ${tokenId}:`, error);
-    // On network/timeout errors, cache short negative to back off retries
+    clearTimeout(timeout);
+    if (error instanceof Error && error.name === "AbortError") {
+      console.warn(`[FEED] Timeout fetching check ${tokenId}`);
+    } else {
+      console.error(
+        `[FEED] Error fetching check image for token ${tokenId}:`,
+        error
+      );
+    }
+    // Cache network/timeout errors for 1 minute
     imageCache.set(tokenId, {
       value: null,
       expiresAt: Date.now() + 60 * 1000,
     });
+    return null;
   }
-  return null;
 }
 
 export async function GET() {
   const routeStartMs = Date.now();
   try {
     console.log("[FEED] Route start");
-    // Fetch transfers to and from the BLACK_CHECK_ONE_SEPOLIA_ADDRESS
+    // Fetch transfers to and from the BLACK_CHECK_ONE_SEPOLIA_ADDRESS, and from 0x0 (mints)
     const supabaseStartMs = Date.now();
     const { data, error } = await supabase
       .from("Transfer")
       .select("*")
       .or(
-        `to.eq.${BLACK_CHECK_ONE_SEPOLIA_ADDRESS.toLowerCase()},from.eq.${BLACK_CHECK_ONE_SEPOLIA_ADDRESS.toLowerCase()}`
+        `to.eq.${BLACK_CHECK_ONE_SEPOLIA_ADDRESS.toLowerCase()},from.eq.${BLACK_CHECK_ONE_SEPOLIA_ADDRESS.toLowerCase()},from.eq.0x0000000000000000000000000000000000000000`
       )
       .order("block_number", { ascending: false })
       .limit(50);
@@ -168,17 +208,34 @@ export async function GET() {
             const isDeposit =
               item.to?.toLowerCase() ===
               BLACK_CHECK_ONE_SEPOLIA_ADDRESS.toLowerCase();
+            const isMint =
+              item.from?.toLowerCase() ===
+              "0x0000000000000000000000000000000000000000";
 
             let checkImage: string | null = null;
             if (item.token_id) {
               checkImage = await fetchImageWithMetrics(item.token_id);
             }
 
+            let action: "deposited" | "withdrew" | "minted";
+            let userAddress: string;
+
+            if (isMint) {
+              action = "minted";
+              userAddress = item.to!; // The recipient of the mint
+            } else if (isDeposit) {
+              action = "deposited";
+              userAddress = item.from!; // The depositor
+            } else {
+              action = "withdrew";
+              userAddress = item.to!; // The withdrawer
+            }
+
             feedData[current] = {
               id: item.id,
-              userAddress: isDeposit ? item.from! : item.to!,
+              userAddress,
               userName: undefined, // We don't have user names in the Transfer table
-              action: isDeposit ? "deposited" : "withdrew",
+              action,
               checkCount: 1,
               tokenId: item.token_id || 0,
               timestamp: item.block_timestamp?.toString() || "",
