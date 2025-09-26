@@ -20,6 +20,7 @@ const COLLECTION_CONTRACTS_MAINNET = [
 export async function POST(request: NextRequest) {
   try {
     const { tokenIds } = await request.json();
+    console.log(`[Batch API] Received tokenIds:`, tokenIds);
 
     if (!tokenIds || !Array.isArray(tokenIds) || tokenIds.length === 0) {
       return NextResponse.json(
@@ -53,53 +54,92 @@ export async function POST(request: NextRequest) {
 
     const results: Record<string, any> = {};
 
-    // Try to find the checks in each collection
-    for (const contractAddress of COLLECTION_CONTRACTS) {
-      // Use getNFTsForCollection to get NFTs from the collection
-      const url = `${baseUrl}/getNFTs?contractAddress=${contractAddress}&withMetadata=true&limit=100&owner=${BLACK_CHECK_ONE_SEPOLIA_ADDRESS}`;
+    // Create all possible URL combinations (tokenId x contractAddress)
+    const fetchPromises: Array<{
+      tokenId: string;
+      contractAddress: string;
+      promise: Promise<any>;
+    }> = [];
 
-      try {
-        const response = await fetch(url, {
+    for (const tokenId of tokenIds) {
+      for (const contractAddress of COLLECTION_CONTRACTS) {
+        const url = `${baseUrl}/getNFTMetadata?contractAddress=${contractAddress}&tokenId=${tokenId}`;
+
+        const promise = fetch(url, {
           method: "GET",
           headers: {
             accept: "application/json",
           },
-        });
-
-        if (response.ok) {
-          const data = await response.json();
-
-          if (data.ownedNfts && data.ownedNfts.length > 0) {
-            // Find NFTs with matching token IDs
-            for (const nft of data.ownedNfts) {
-              const tokenId = BigInt(nft.id.tokenId).toString();
-              if (tokenIds.includes(tokenId)) {
-                // Transform Alchemy response to match expected format
-                const transformedCheck = {
-                  identifier: tokenId,
-                  name: nft.title || `#${tokenId}`,
-                  description: nft.description || "",
-                  image_url:
-                    nft.media?.[0]?.gateway || nft.media?.[0]?.raw || "",
-                  display_image_url:
-                    nft.media?.[0]?.gateway || nft.media?.[0]?.raw || "",
-                  collection: nft.contract.name || "",
-                  contract: nft.contract.address,
-                  token_standard: nft.tokenType,
-                  metadata: nft.metadata || {},
+        })
+          .then(async (response) => {
+            if (response.ok) {
+              const nft = await response.json();
+              if (nft && nft.id) {
+                return {
+                  tokenId,
+                  contractAddress,
+                  nft,
+                  success: true,
                 };
-
-                results[tokenId] = transformedCheck;
               }
             }
-          }
-        }
-      } catch (error) {
-        console.error(`Error fetching checks from ${contractAddress}:`, error);
-        continue;
+            return {
+              tokenId,
+              contractAddress,
+              success: false,
+            };
+          })
+          .catch((error) => {
+            console.error(
+              `Error fetching check ${tokenId} from ${contractAddress}:`,
+              error
+            );
+            return {
+              tokenId,
+              contractAddress,
+              success: false,
+            };
+          });
+
+        fetchPromises.push({ tokenId, contractAddress, promise });
       }
     }
 
+    // Wait for all requests to complete
+    const responses = await Promise.all(fetchPromises.map((p) => p.promise));
+    console.log(
+      `[Batch API] Completed ${responses.length} requests, ${
+        responses.filter((r) => r.success).length
+      } successful`
+    );
+
+    // Process results, prioritizing first successful result for each tokenId
+    for (const response of responses) {
+      if (response.success && !results[response.tokenId]) {
+        const nft = response.nft;
+        // Transform Alchemy response to match expected format
+        const transformedCheck = {
+          identifier: BigInt(nft.id.tokenId).toString(),
+          name: nft.title || `#${BigInt(nft.id.tokenId).toString()}`,
+          description: nft.description || "",
+          image_url: nft.media?.[0]?.gateway || nft.media?.[0]?.raw || "",
+          display_image_url:
+            nft.media?.[0]?.gateway || nft.media?.[0]?.raw || "",
+          collection: nft.contract.name || "",
+          contract: nft.contract.address,
+          token_standard: nft.tokenType,
+          metadata: nft.metadata || {},
+        };
+
+        results[response.tokenId] = transformedCheck;
+        console.log(`[Batch API] Found metadata for token ${response.tokenId}`);
+      }
+    }
+
+    console.log(
+      `[Batch API] Returning ${Object.keys(results).length} results:`,
+      Object.keys(results)
+    );
     return NextResponse.json(results);
   } catch (error) {
     console.error("Batch check API route error:", error);

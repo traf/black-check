@@ -20,8 +20,16 @@ export async function GET(
   request: NextRequest,
   { params }: { params: Promise<{ address: string }> }
 ) {
+  const startTime = Date.now();
+  console.log(
+    `[${new Date().toISOString()}] Starting NFTs API call for address: ${
+      (await params).address
+    }`
+  );
+
   try {
     const { address } = await params;
+    console.log(`[${Date.now() - startTime}ms] Address validation completed`);
 
     if (!address) {
       return NextResponse.json(
@@ -53,8 +61,6 @@ export async function GET(
       network === "sepolia"
         ? `https://eth-sepolia.g.alchemy.com/nft/v2/${alchemyApiKey}`
         : `https://eth-mainnet.g.alchemy.com/nft/v2/${alchemyApiKey}`;
-    const allNFTs = [];
-
     let COLLECTION_CONTRACTS = [];
     if (network === "sepolia") {
       COLLECTION_CONTRACTS = COLLECTION_CONTRACTS_SEPOLIA;
@@ -62,8 +68,14 @@ export async function GET(
       COLLECTION_CONTRACTS = COLLECTION_CONTRACTS_MAINNET;
     }
 
-    // Fetch NFTs from each collection separately
-    for (const contractAddress of COLLECTION_CONTRACTS) {
+    console.log(
+      `[${Date.now() - startTime}ms] Starting parallel fetch from ${
+        COLLECTION_CONTRACTS.length
+      } collections`
+    );
+
+    // Fetch NFTs from all collections in parallel
+    const fetchPromises = COLLECTION_CONTRACTS.map(async (contractAddress) => {
       const url = `${baseUrl}/getNFTs?owner=${address}&contractAddresses[]=${contractAddress}&withMetadata=true&pageSize=100&orderBy=transferTime`;
 
       try {
@@ -90,26 +102,80 @@ export async function GET(
               metadata: nft.metadata || {},
             }));
 
-            allNFTs.push(...transformedNFTs);
+            console.log(
+              `[${Date.now() - startTime}ms] Found ${
+                transformedNFTs.length
+              } NFTs in ${contractAddress}`
+            );
+            return { contractAddress, nfts: transformedNFTs, success: true };
+          } else {
+            console.log(
+              `[${
+                Date.now() - startTime
+              }ms] No NFTs found in ${contractAddress}`
+            );
+            return { contractAddress, nfts: [], success: true };
           }
         } else {
           const errorText = await response.text();
           console.error(
-            `Alchemy API error for ${contractAddress}:`,
+            `[${
+              Date.now() - startTime
+            }ms] Alchemy API error for ${contractAddress}:`,
             response.status,
             response.statusText,
             `URL: ${url}`,
             `Error details: ${errorText}`
           );
+          return {
+            contractAddress,
+            nfts: [],
+            success: false,
+            error: errorText,
+          };
         }
       } catch (error) {
-        console.error(`Error fetching ${contractAddress}:`, error);
+        console.error(
+          `[${Date.now() - startTime}ms] Error fetching ${contractAddress}:`,
+          error
+        );
+        return { contractAddress, nfts: [], success: false, error: error };
       }
-    }
+    });
 
+    // Wait for all collection fetches to complete
+    const results = await Promise.all(fetchPromises);
+    console.log(
+      `[${Date.now() - startTime}ms] All collection fetches completed`
+    );
+
+    // Combine all NFTs from successful requests
+    const allNFTs = results
+      .filter((result) => result.success)
+      .flatMap((result) => result.nfts);
+
+    const totalFound = results.reduce(
+      (sum, result) => sum + result.nfts.length,
+      0
+    );
+    const successfulCollections = results.filter(
+      (result) => result.success
+    ).length;
+
+    console.log(
+      `[${
+        Date.now() - startTime
+      }ms] Found ${totalFound} total NFTs from ${successfulCollections}/${
+        COLLECTION_CONTRACTS.length
+      } collections`
+    );
+
+    console.log(
+      `[${Date.now() - startTime}ms] NFTs API call completed successfully`
+    );
     return NextResponse.json({ nfts: allNFTs });
   } catch (error) {
-    console.error("API route error:", error);
+    console.error(`[${Date.now() - startTime}ms] NFTs API route error:`, error);
     return NextResponse.json(
       {
         error: "Failed to fetch NFTs",
