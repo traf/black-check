@@ -189,7 +189,9 @@ export default function Tokens() {
     try {
       const publicClient = createPublicClient({
         chain: sepolia,
-        transport: http(),
+        transport: http(
+          `https://eth-sepolia.g.alchemy.com/v2/${process.env.NEXT_PUBLIC_ALCHEMY_API_KEY}`
+        ),
       });
 
       // Check approval for Editions contract
@@ -269,7 +271,9 @@ export default function Tokens() {
       const publicClient = createPublicClient({
         chain:
           process.env.NEXT_PUBLIC_NETWORK === "sepolia" ? sepolia : mainnet,
-        transport: http(window.ethereum as any),
+        transport: http(
+          `https://eth-sepolia.g.alchemy.com/v2/${process.env.NEXT_PUBLIC_ALCHEMY_API_KEY}`
+        ),
       });
 
       await publicClient.waitForTransactionReceipt({ hash });
@@ -395,11 +399,16 @@ export default function Tokens() {
       const publicClient = createPublicClient({
         chain:
           process.env.NEXT_PUBLIC_NETWORK === "sepolia" ? sepolia : mainnet,
-        transport: http(window.ethereum as any),
+        transport: http(
+          `https://eth-sepolia.g.alchemy.com/v2/${process.env.NEXT_PUBLIC_ALCHEMY_API_KEY}`
+        ),
       });
+
+      console.log("!!!Waiting for receipt", hash);
 
       await publicClient.waitForTransactionReceipt({ hash });
 
+      console.log("!!!Receipt mined", hash);
       // Clear selected NFTs after successful deposit
       setSelectedNfts(new Set());
 
@@ -493,7 +502,9 @@ export default function Tokens() {
             : process.env.NEXT_PUBLIC_NETWORK === "mainnet"
             ? mainnet
             : sepolia,
-        transport: http(window.ethereum as any),
+        transport: http(
+          `https://eth-sepolia.g.alchemy.com/v2/${process.env.NEXT_PUBLIC_ALCHEMY_API_KEY}`
+        ),
       });
 
       console.log("!!!Waiting for receipt");
