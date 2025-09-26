@@ -876,13 +876,13 @@ export default function Tokens() {
         )}
         {pendingTransactionHash && (
           <div className="mb-4 p-3 bg-green-500/20 border border-green-500/40 rounded-lg">
-            <div className="flex items-center justify-between">
-              <div className="flex items-center gap-2 text-green-300">
-                <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-green-300"></div>
-                <span className="text-sm">
-                  Transaction submitted, waiting for confirmation...
-                </span>
-              </div>
+            <div className="flex items-center gap-2 text-green-300">
+              <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-green-300"></div>
+              <span className="text-sm">
+                Transaction submitted, waiting for confirmation...
+              </span>
+            </div>
+            <div className="mt-2">
               <a
                 href={getEtherscanUrl(pendingTransactionHash)}
                 target="_blank"
@@ -891,9 +891,6 @@ export default function Tokens() {
               >
                 View on Etherscan
               </a>
-            </div>
-            <div className="mt-2 text-xs text-green-400 font-mono break-all">
-              {pendingTransactionHash}
             </div>
           </div>
         )}
@@ -961,9 +958,6 @@ export default function Tokens() {
                 >
                   View transaction on Etherscan
                 </a>
-                <div className="mt-2 text-xs text-green-400 font-mono break-all">
-                  {completedTransactionHash}
-                </div>
               </div>
             )}
           </div>
@@ -1001,13 +995,13 @@ export default function Tokens() {
         )}
         {pendingWithdrawTransactionHash && (
           <div className="mb-4 p-3 bg-green-500/20 border border-green-500/40 rounded-lg">
-            <div className="flex items-center justify-between">
-              <div className="flex items-center gap-2 text-green-300">
-                <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-green-300"></div>
-                <span className="text-sm">
-                  Transaction submitted, waiting for confirmation...
-                </span>
-              </div>
+            <div className="flex items-center gap-2 text-green-300">
+              <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-green-300"></div>
+              <span className="text-sm">
+                Transaction submitted, waiting for confirmation...
+              </span>
+            </div>
+            <div className="mt-2">
               <a
                 href={getEtherscanUrl(pendingWithdrawTransactionHash)}
                 target="_blank"
@@ -1016,9 +1010,6 @@ export default function Tokens() {
               >
                 View on Etherscan
               </a>
-            </div>
-            <div className="mt-2 text-xs text-green-400 font-mono break-all">
-              {pendingWithdrawTransactionHash}
             </div>
           </div>
         )}
@@ -1082,9 +1073,6 @@ export default function Tokens() {
                 >
                   View transaction on Etherscan
                 </a>
-                <div className="mt-2 text-xs text-green-400 font-mono break-all">
-                  {completedWithdrawTransactionHash}
-                </div>
               </div>
             )}
           </div>
