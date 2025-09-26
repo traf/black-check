@@ -70,10 +70,33 @@ export default function Tokens() {
   const [wrongNetwork, setWrongNetwork] = useState(false);
   const [showCelebration, setShowCelebration] = useState(false);
   const [depositedCount, setDepositedCount] = useState(0);
+  const [pendingTransactionHash, setPendingTransactionHash] = useState<
+    string | null
+  >(null);
+  const [completedTransactionHash, setCompletedTransactionHash] = useState<
+    string | null
+  >(null);
+  const [pendingWithdrawTransactionHash, setPendingWithdrawTransactionHash] =
+    useState<string | null>(null);
+  const [
+    completedWithdrawTransactionHash,
+    setCompletedWithdrawTransactionHash,
+  ] = useState<string | null>(null);
+  const [showWithdrawCelebration, setShowWithdrawCelebration] = useState(false);
+  const [withdrawnCount, setWithdrawnCount] = useState(0);
 
   // Chain switching utilities
   const getTargetChain = () => {
     return process.env.NEXT_PUBLIC_NETWORK === "sepolia" ? sepolia : mainnet;
+  };
+
+  // Helper function to get Etherscan URL for transaction
+  const getEtherscanUrl = (txHash: string) => {
+    const isSepolia = process.env.NEXT_PUBLIC_NETWORK === "sepolia";
+    const baseUrl = isSepolia
+      ? "https://sepolia.etherscan.io"
+      : "https://etherscan.io";
+    return `${baseUrl}/tx/${txHash}`;
   };
 
   const checkCurrentChain = async () => {
@@ -397,6 +420,9 @@ export default function Tokens() {
           process.env.NEXT_PUBLIC_NETWORK === "sepolia" ? sepolia : mainnet,
       });
 
+      // Store the transaction hash for display in the modal
+      setPendingTransactionHash(hash);
+
       // Wait for transaction to be mined before updating status
       const publicClient = createPublicClient({
         chain:
@@ -421,12 +447,20 @@ export default function Tokens() {
       // Refresh the NFT lists
       await Promise.all([fetchTokens(), fetchDepositedTokens()]);
 
+      // Store the completed transaction hash for the success modal
+      setCompletedTransactionHash(hash);
+
+      // Clear the pending transaction hash
+      setPendingTransactionHash(null);
+
       // Close the deposit modal and show celebration
       setShowDepositPrompt(false);
       setShowCelebration(true);
     } catch (err) {
       console.error("Error depositing NFTs:", err);
       setError("Failed to deposit NFTs. Please try again.");
+      // Clear the pending transaction hash on error
+      setPendingTransactionHash(null);
     } finally {
       setDepositLoading(false);
     }
@@ -501,6 +535,9 @@ export default function Tokens() {
             : sepolia,
       });
 
+      // Store the transaction hash for display in the modal
+      setPendingWithdrawTransactionHash(hash);
+
       // Wait for transaction to be mined
       const publicClientForReceipt = createPublicClient({
         chain:
@@ -520,17 +557,29 @@ export default function Tokens() {
 
       console.log("!!!Withdrawal successful");
 
+      // Store the completed transaction hash for the success modal
+      setCompletedWithdrawTransactionHash(hash);
+
+      // Store the count of withdrawn NFTs for celebration
+      setWithdrawnCount(selectedNfts.size);
+
+      // Clear the pending transaction hash
+      setPendingWithdrawTransactionHash(null);
+
       // Clear selected NFTs after successful withdrawal
       setSelectedNfts(new Set());
 
       // Refresh the NFT lists
       await Promise.all([fetchTokens(), fetchDepositedTokens()]);
 
-      // Close the withdraw modal
+      // Close the withdraw modal and show celebration
       setShowWithdrawPrompt(false);
+      setShowWithdrawCelebration(true);
     } catch (err) {
       console.error("Error withdrawing NFTs:", err);
       setError("Failed to withdraw NFTs. Please try again.");
+      // Clear the pending transaction hash on error
+      setPendingWithdrawTransactionHash(null);
     } finally {
       setWithdrawLoading(false);
     }
@@ -825,6 +874,29 @@ export default function Tokens() {
             </div>
           </div>
         )}
+        {pendingTransactionHash && (
+          <div className="mb-4 p-3 bg-green-500/20 border border-green-500/40 rounded-lg">
+            <div className="flex items-center justify-between">
+              <div className="flex items-center gap-2 text-green-300">
+                <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-green-300"></div>
+                <span className="text-sm">
+                  Transaction submitted, waiting for confirmation...
+                </span>
+              </div>
+              <a
+                href={getEtherscanUrl(pendingTransactionHash)}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="text-green-300 hover:text-green-200 text-sm underline"
+              >
+                View on Etherscan
+              </a>
+            </div>
+            <div className="mt-2 text-xs text-green-400 font-mono break-all">
+              {pendingTransactionHash}
+            </div>
+          </div>
+        )}
         <h3>Selected Checks:</h3>
         <div className="max-h-36 overflow-y-auto space-y-1">
           {Array.from(selectedNfts).map((identifier) => {
@@ -851,7 +923,10 @@ export default function Tokens() {
       {/* Celebration Modal */}
       <Modal
         isOpen={showCelebration}
-        onClose={() => setShowCelebration(false)}
+        onClose={() => {
+          setShowCelebration(false);
+          setCompletedTransactionHash(null);
+        }}
         title="🎉 Deposit Successful!"
         subtitle={`You've successfully deposited ${depositedCount} Check${
           depositedCount !== 1 ? "s" : ""
@@ -876,6 +951,21 @@ export default function Tokens() {
             <p className="text-neutral-400 text-sm mt-2">
               Your Checks are now part of the Black Check creation process
             </p>
+            {completedTransactionHash && (
+              <div className="mt-4 p-3 bg-green-500/10 border border-green-500/20 rounded-lg">
+                <a
+                  href={getEtherscanUrl(completedTransactionHash)}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="text-green-300 hover:text-green-200 text-sm underline"
+                >
+                  View transaction on Etherscan
+                </a>
+                <div className="mt-2 text-xs text-green-400 font-mono break-all">
+                  {completedTransactionHash}
+                </div>
+              </div>
+            )}
           </div>
         </div>
       </Modal>
@@ -909,6 +999,29 @@ export default function Tokens() {
             </div>
           </div>
         )}
+        {pendingWithdrawTransactionHash && (
+          <div className="mb-4 p-3 bg-green-500/20 border border-green-500/40 rounded-lg">
+            <div className="flex items-center justify-between">
+              <div className="flex items-center gap-2 text-green-300">
+                <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-green-300"></div>
+                <span className="text-sm">
+                  Transaction submitted, waiting for confirmation...
+                </span>
+              </div>
+              <a
+                href={getEtherscanUrl(pendingWithdrawTransactionHash)}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="text-green-300 hover:text-green-200 text-sm underline"
+              >
+                View on Etherscan
+              </a>
+            </div>
+            <div className="mt-2 text-xs text-green-400 font-mono break-all">
+              {pendingWithdrawTransactionHash}
+            </div>
+          </div>
+        )}
         <h3>Selected Checks:</h3>
         <div className="max-h-36 overflow-y-auto space-y-1">
           {Array.from(selectedNfts).map((identifier) => {
@@ -925,6 +1038,56 @@ export default function Tokens() {
               </div>
             );
           })}
+        </div>
+      </Modal>
+
+      {/* Withdraw Success Modal */}
+      <Modal
+        isOpen={showWithdrawCelebration}
+        onClose={() => {
+          setShowWithdrawCelebration(false);
+          setCompletedWithdrawTransactionHash(null);
+        }}
+        title="🎉 Withdrawal Successful!"
+        subtitle={`You've successfully withdrawn ${withdrawnCount} Check${
+          withdrawnCount !== 1 ? "s" : ""
+        } from the Black Check contract. Your Checks are now back in your wallet.`}
+        closeText="Awesome!"
+      >
+        <div className="flex flex-col items-center gap-6 py-4">
+          <div className="relative">
+            <img
+              src="/check-token.png"
+              alt="black check"
+              className="w-24 h-24 animate-bounce"
+            />
+            <div className="absolute -top-2 -right-2 w-6 h-6 bg-green-500 rounded-full flex items-center justify-center">
+              <img src="/check-light.svg" alt="success" className="w-4 h-4" />
+            </div>
+          </div>
+          <div className="text-center">
+            <p className="text-green-400 font-semibold text-lg">
+              {withdrawnCount} Check{withdrawnCount !== 1 ? "s" : ""} withdrawn!
+            </p>
+            <p className="text-neutral-400 text-sm mt-2">
+              Your Checks are now back in your wallet
+            </p>
+            {completedWithdrawTransactionHash && (
+              <div className="mt-4 p-3 bg-green-500/10 border border-green-500/20 rounded-lg">
+                <a
+                  href={getEtherscanUrl(completedWithdrawTransactionHash)}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="text-green-300 hover:text-green-200 text-sm underline"
+                >
+                  View transaction on Etherscan
+                </a>
+                <div className="mt-2 text-xs text-green-400 font-mono break-all">
+                  {completedWithdrawTransactionHash}
+                </div>
+              </div>
+            )}
+          </div>
         </div>
       </Modal>
 
