@@ -58,6 +58,10 @@ export default function Tokens() {
     originals: boolean;
   }>({ editions: false, originals: false });
   const [showApprovalPrompt, setShowApprovalPrompt] = useState(false);
+  const [neededApprovals, setNeededApprovals] = useState<{
+    editions: boolean;
+    originals: boolean;
+  }>({ editions: false, originals: false });
   const [showDepositPrompt, setShowDepositPrompt] = useState(false);
   const [showWithdrawPrompt, setShowWithdrawPrompt] = useState(false);
   const [approvalLoading, setApprovalLoading] = useState({
@@ -351,11 +355,16 @@ export default function Tokens() {
           CHECKS_ORIGINALS_SEPOLIA_ADDRESS.toLowerCase()
       );
 
+      // Check if approvals are needed for the collections being deposited
+      const needsEditionsApproval = hasEditions && !approvalStatus.editions;
+      const needsOriginalsApproval = hasOriginals && !approvalStatus.originals;
+
       // If approvals are needed, show approval prompt
-      if (
-        (hasEditions && !approvalStatus.editions) ||
-        (hasOriginals && !approvalStatus.originals)
-      ) {
+      if (needsEditionsApproval || needsOriginalsApproval) {
+        setNeededApprovals({
+          editions: needsEditionsApproval,
+          originals: needsOriginalsApproval,
+        });
         setShowApprovalPrompt(true);
         setLoading(false);
         return;
@@ -770,7 +779,10 @@ export default function Tokens() {
           // setShowApprovalPrompt(false);
           await performDeposit();
         }}
-        primaryDisabled={!approvalStatus.editions || !approvalStatus.originals}
+        primaryDisabled={
+          (neededApprovals.editions && !approvalStatus.editions) ||
+          (neededApprovals.originals && !approvalStatus.originals)
+        }
       >
         {chainSwitching && (
           <div className="mb-4 p-3 bg-blue-500/20 border border-blue-500/40 rounded-lg">
@@ -786,63 +798,67 @@ export default function Tokens() {
             </div>
           </div>
         )}
-        <Button
-          onClick={async () => {
-            if (approvalStatus.editions) return;
-            try {
-              await requestApproval("editions");
-            } catch (err) {
-              console.error("Error approving editions:", err);
-            }
-          }}
-          variant="border"
-          disabled={approvalLoading.editions || approvalStatus.editions}
-          className="flex justify-between group !p-5"
-          size="sm"
-        >
-          Checks Editions
-          <span className="bg-white/10 py-2 px-3 text-neutral-400 group-hover:text-white flex items-center gap-2">
-            {approvalStatus.editions ? (
-              <>
-                Approved
-                <img src="/check-light.svg" alt="approved" className="w-4" />
-              </>
-            ) : approvalLoading.editions ? (
-              "Approving..."
-            ) : (
-              "Approve"
-            )}
-          </span>
-        </Button>
+        {neededApprovals.editions && (
+          <Button
+            onClick={async () => {
+              if (approvalStatus.editions) return;
+              try {
+                await requestApproval("editions");
+              } catch (err) {
+                console.error("Error approving editions:", err);
+              }
+            }}
+            variant="border"
+            disabled={approvalLoading.editions || approvalStatus.editions}
+            className="flex justify-between group !p-5"
+            size="sm"
+          >
+            Checks Editions
+            <span className="bg-white/10 py-2 px-3 text-neutral-400 group-hover:text-white flex items-center gap-2">
+              {approvalStatus.editions ? (
+                <>
+                  Approved
+                  <img src="/check-light.svg" alt="approved" className="w-4" />
+                </>
+              ) : approvalLoading.editions ? (
+                "Approving..."
+              ) : (
+                "Approve"
+              )}
+            </span>
+          </Button>
+        )}
 
-        <Button
-          onClick={async () => {
-            if (approvalStatus.originals) return;
-            try {
-              await requestApproval("originals");
-            } catch (err) {
-              console.error("Error approving originals:", err);
-            }
-          }}
-          variant="border"
-          disabled={approvalLoading.originals || approvalStatus.originals}
-          className="flex justify-between group !p-5"
-          size="sm"
-        >
-          Checks Originals
-          <span className="bg-white/10 py-2 px-3 text-neutral-400 group-hover:text-white flex items-center gap-2">
-            {approvalStatus.originals ? (
-              <>
-                Approved
-                <img src="/check-light.svg" alt="approved" className="w-4" />
-              </>
-            ) : approvalLoading.originals ? (
-              "Approving..."
-            ) : (
-              "Approve"
-            )}
-          </span>
-        </Button>
+        {neededApprovals.originals && (
+          <Button
+            onClick={async () => {
+              if (approvalStatus.originals) return;
+              try {
+                await requestApproval("originals");
+              } catch (err) {
+                console.error("Error approving originals:", err);
+              }
+            }}
+            variant="border"
+            disabled={approvalLoading.originals || approvalStatus.originals}
+            className="flex justify-between group !p-5"
+            size="sm"
+          >
+            Checks Originals
+            <span className="bg-white/10 py-2 px-3 text-neutral-400 group-hover:text-white flex items-center gap-2">
+              {approvalStatus.originals ? (
+                <>
+                  Approved
+                  <img src="/check-light.svg" alt="approved" className="w-4" />
+                </>
+              ) : approvalLoading.originals ? (
+                "Approving..."
+              ) : (
+                "Approve"
+              )}
+            </span>
+          </Button>
+        )}
       </Modal>
 
       {/* Deposit Confirmation Modal */}
