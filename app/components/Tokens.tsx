@@ -767,7 +767,7 @@ export default function Tokens() {
         closeText="Cancel"
         primaryText="Deposit"
         onPrimaryAction={async () => {
-          setShowApprovalPrompt(false);
+          // setShowApprovalPrompt(false);
           await performDeposit();
         }}
         primaryDisabled={!approvalStatus.editions || !approvalStatus.originals}
