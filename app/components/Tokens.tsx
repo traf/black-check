@@ -272,7 +272,8 @@ export default function Tokens() {
       }
 
       const walletClient = createWalletClient({
-        chain: sepolia,
+        chain:
+          process.env.NEXT_PUBLIC_NETWORK === "sepolia" ? sepolia : mainnet,
         transport: custom(window.ethereum as any),
       });
 
